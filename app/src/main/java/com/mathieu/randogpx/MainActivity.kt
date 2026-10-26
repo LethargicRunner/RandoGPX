@@ -33,6 +33,11 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.ln
+import kotlin.math.PI
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
@@ -197,10 +202,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val bbox = BoundingBox.fromGeoPoints(track.map { GeoPoint(it.lat, it.lon) })
             .increaseByScale(1.15f)
 
-        val cm = CacheManager(map)
         val zoomMin = 14
         val zoomMax = 18
-        val possible = cm.possibleTilesCoverage(bbox, zoomMin, zoomMax)
+        val possible = estimateTiles(bbox, zoomMin, zoomMax)
 
         AlertDialog.Builder(this)
             .setTitle("Téléchargement hors-ligne")
@@ -211,9 +215,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             )
             .setPositiveButton("Télécharger") { _, _ ->
                 Toast.makeText(this, "Téléchargement démarré…", Toast.LENGTH_LONG).show()
+                val cm = CacheManager(map)
                 cm.downloadAreaAsync(
                     this, bbox, zoomMin, zoomMax,
-                    object : CacheManager.CacheManagerDelegate {
+                    object : CacheManager.CacheManagerCallback {
                         override fun onTaskComplete() {
                             Toast.makeText(
                                 this@MainActivity,
@@ -231,15 +236,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         override fun onProgress(actual: Int, total: Int) {
                             tvInfo.text = "Téléchargement tuiles : " + actual + " / " + total
                         }
-                        override fun setKnownTileCount(known: Int) {}
-                        override fun onStart() {}
                         override fun downloadStarted() {}
                         override fun updateProgressTitle(stringTitle: String?) {}
+                        override fun setKnownTileCount(known: Int) {}
                     }
                 )
             }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    /** Estimation du nombre de tuiles couvrant une zone pour des zooms donnés. */
+    private fun estimateTiles(bbox: BoundingBox, zMin: Int, zMax: Int): Long {
+        var total = 0.0
+        for (z in zMin..zMax) {
+            val x1 = lonToTileX(bbox.lonWest, z)
+            val x2 = lonToTileX(bbox.lonEast, z)
+            val y1 = latToTileY(bbox.latNorth, z)
+            val y2 = latToTileY(bbox.latSouth, z)
+            total += (abs(x2 - x1) + 1) * (abs(y2 - y1) + 1)
+        }
+        return total.toLong()
+    }
+
+    private fun lonToTileX(lon: Double, zoom: Int): Double =
+        (lon + 180.0) / 360.0 * (1 shl zoom)
+
+    private fun latToTileY(lat: Double, zoom: Int): Double {
+        val latRad = Math.toRadians(lat)
+        return (1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / PI) / 2.0 * (1 shl zoom)
     }
 
     private fun importAndSaveGpx(uri: android.net.Uri) {
@@ -476,7 +501,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         azimuth = Math.toDegrees(orientation[0].toDouble()).toFloat()
 
         val bearing = targetBearing ?: return
-        val rotation = (bearing - azimuth + 360) % 360
+        val rotation = ((bearing - azimuth + 360) % 360).toFloat()
         arrow.animate().rotation(rotation).setDuration(120).start()
     }
 

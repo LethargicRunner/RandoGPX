@@ -19,9 +19,9 @@ object GpxRepository {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
-                put(MediaStore.Files.DISPLAY_NAME, name)
-                put(MediaStore.Files.MIME_TYPE, "application/gpx+xml")
-                put(MediaStore.Files.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/" + FOLDER)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/gpx+xml")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/" + FOLDER)
             }
             val uri = context.contentResolver.insert(
                 MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values
@@ -43,15 +43,18 @@ object GpxRepository {
             val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             val query = context.contentResolver.query(
                 collection,
-                arrayOf(MediaStore.Files.DISPLAY_NAME, MediaStore.Files._ID),
-                MediaStore.Files.DISPLAY_NAME + " LIKE ? AND " +
-                    MediaStore.Files.RELATIVE_PATH + " LIKE ?",
+                arrayOf(
+                    MediaStore.MediaColumns.DISPLAY_NAME,
+                    MediaStore.MediaColumns._ID
+                ),
+                MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ? AND " +
+                    MediaStore.MediaColumns.RELATIVE_PATH + " LIKE ?",
                 arrayOf("%.gpx", "%" + FOLDER + "%"),
-                MediaStore.Files.DISPLAY_NAME + " ASC"
+                MediaStore.MediaColumns.DISPLAY_NAME + " ASC"
             )
             query?.use { c ->
-                val nameIdx = c.getColumnIndex(MediaStore.Files.DISPLAY_NAME)
-                val idIdx = c.getColumnIndex(MediaStore.Files._ID)
+                val nameIdx = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                val idIdx = c.getColumnIndex(MediaStore.MediaColumns._ID)
                 while (c.moveToNext()) {
                     result += c.getString(nameIdx) to
                             Uri.withAppendedPath(collection, c.getLong(idIdx).toString())

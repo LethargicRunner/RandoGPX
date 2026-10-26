@@ -77,9 +77,9 @@ class HikeLogger(
         val bytes = json.toString(2).toByteArray()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
-                put(MediaStore.Files.DISPLAY_NAME, fileName)
-                put(MediaStore.Files.MIME_TYPE, "application/json")
-                put(MediaStore.Files.RELATIVE_PATH,
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                put(MediaStore.MediaColumns.RELATIVE_PATH,
                     Environment.DIRECTORY_DOCUMENTS + "/" + GpxRepository.FOLDER + "/logs")
             }
             context.contentResolver.insert(
