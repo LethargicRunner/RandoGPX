@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,7 +34,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Publier l'APK
+      - name: Publier l'APK en Release (téléchargement direct)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.1
+          name: RandoGPX v1.1
+          body: |
+            🥾 RandoGPX v1.1
+
+            Navigation GPX pour la randonnée : suivi GPS, alerte hors-tracé,
+            stats de parcours, waypoints, cartes OSM/OpenTopoMap/IGN,
+            mode hors-ligne, bibliothèque de GPX, journaux avec météo.
+
+            📲 Téléchargez **app-debug.apk** ci-dessous et installez-le
+            (autoriser les applications inconnues sur le téléphone).
+          files: app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
+
+      - name: Publier aussi en Artifact (secours)
         uses: actions/upload-artifact@v4
         with:
           name: RandoGPX-APK
