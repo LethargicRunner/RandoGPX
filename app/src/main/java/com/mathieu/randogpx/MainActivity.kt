@@ -34,10 +34,10 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.PI
+import kotlin.math.tan
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
@@ -220,25 +220,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     this, bbox, zoomMin, zoomMax,
                     object : CacheManager.CacheManagerCallback {
                         override fun onTaskComplete() {
-                            Toast.makeText(
-                                this@MainActivity,
-                                "✅ Zone hors-ligne prête ! Vous pouvez couper le réseau.",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "✅ Zone hors-ligne prête ! Vous pouvez couper le réseau.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
-                        override fun onTaskFailed(errors: java.util.ArrayList<java.util.Map.Entry<Long, Int>>?) {
-                            Toast.makeText(
-                                this@MainActivity,
-                                "⚠ Terminé avec des erreurs : vérifiez votre connexion puis relancez.",
-                                Toast.LENGTH_LONG
-                            ).show()
+                        override fun onTaskFailed(errors: Int) {
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "⚠ Terminé avec " + errors + " erreurs : vérifiez votre connexion puis relancez.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
-                        override fun onProgress(actual: Int, total: Int) {
-                            tvInfo.text = "Téléchargement tuiles : " + actual + " / " + total
+                        override fun updateProgress(progress: Int, currentZoomLevel: Int, zoomMin: Int, zoomMax: Int) {
+                            runOnUiThread {
+                                tvInfo.text = "Tuiles : " + progress + " (zoom " + currentZoomLevel + "/" + zoomMax + ")"
+                            }
                         }
                         override fun downloadStarted() {}
-                        override fun updateProgressTitle(stringTitle: String?) {}
-                        override fun setKnownTileCount(known: Int) {}
+                        override fun setPossibleTilesInArea(total: Int) {}
                     }
                 )
             }
