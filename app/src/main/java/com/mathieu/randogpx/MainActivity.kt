@@ -380,6 +380,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Toast.makeText(this, "Importez d'abord un tracé GPX", Toast.LENGTH_SHORT).show()
             return
         }
+        // OpenStreetMap standard interdit le téléchargement massif (politique d'usage des tuiles OSM).
+        // Seuls OpenTopoMap et IGN Plan l'autorisent dans cette app.
+        val srcName = map.tileProvider.tileSource.name()
+        if (srcName != "OpenTopoMap" && srcName != "IGN Plan") {
+            AlertDialog.Builder(this)
+                .setTitle("Carte non téléchargeable")
+                .setMessage(
+                    "OpenStreetMap standard interdit le téléchargement massif de tuiles " +
+                        "(politique d'OpenStreetMap).\n\nUtilisez OpenTopoMap ou IGN Plan " +
+                        "pour la carte hors-ligne.")
+                .setPositiveButton("Basculer sur OpenTopoMap") { _, _ ->
+                    map.setTileSource(TileSources.OPENTOPOMAP)
+                    map.invalidate()
+                    Toast.makeText(this, "Carte OpenTopoMap — relancez Hors-ligne", Toast.LENGTH_LONG).show()
+                }
+                .setNeutralButton("Basculer sur IGN Plan") { _, _ ->
+                    map.setTileSource(TileSources.IGN_PLAN)
+                    map.invalidate()
+                    Toast.makeText(this, "Carte IGN Plan — relancez Hors-ligne", Toast.LENGTH_LONG).show()
+                }
+                .setNegativeButton("Annuler", null)
+                .show()
+            return
+        }
         val bbox = BoundingBox.fromGeoPoints(track.map { GeoPoint(it.lat, it.lon) })
             .increaseByScale(1.15f)
 
@@ -396,6 +420,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             )
             .setPositiveButton("Télécharger") { _, _ ->
                 Toast.makeText(this, "Téléchargement démarré…", Toast.LENGTH_LONG).show()
+                try {
                 val cm = CacheManager(map)
                 cm.downloadAreaAsync(
                     this, bbox, zoomMin, zoomMax,
@@ -427,6 +452,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         override fun setPossibleTilesInArea(total: Int) {}
                     }
                 )
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this, "Téléchargement impossible : " + e.message, Toast.LENGTH_LONG
+                    ).show()
+                }
             }
             .setNegativeButton("Annuler", null)
             .show()
