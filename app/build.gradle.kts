@@ -11,8 +11,32 @@ android {
         applicationId = "com.mathieu.randogpx"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.4"
+        versionCode = 5
+        versionName = "1.5"
+    }
+
+    // Signature release : n'active la signature que si un keystore est fourni
+    // (fichier release-signing/randogpx.jks créé par le workflow, mots de passe
+    // passés via les secrets GitHub KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD).
+    val keystoreFile = rootProject.file("release-signing/randogpx.jks")
+    signingConfigs {
+        create("release") {
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "randogpx2026"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "randogpx"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "randogpx2026"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isMinifyEnabled = false
+        }
     }
 
     compileOptions {

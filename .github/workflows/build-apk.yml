@@ -26,42 +26,64 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Préparer la signature release (si keystore configuré)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            mkdir -p release-signing
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > release-signing/randogpx.jks
+            echo "Keystore présent : l'APK release sera signé."
+          else
+            echo "Pas de keystore configuré : APK debug uniquement."
+            echo "Voir le workflow 'Générer le keystore' puis le secret KEYSTORE_BASE64."
+          fi
+
       - name: Générer le wrapper Gradle
         run: gradle wrapper --gradle-version 8.7
 
-      - name: Compiler l'APK
+      - name: Compiler les APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug assembleRelease --no-daemon
 
-      - name: Publier l'APK en Release (téléchargement direct)
+      - name: Rassembler les APK à publier
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk dist/
+            echo "APK release signé ajouté."
+          fi
+          ls -la dist/
+
+      - name: Publier les APK en Release (téléchargement direct)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4
-          name: RandoGPX v1.4
+          tag_name: v1.5
+          name: RandoGPX v1.5
           body: |
-            🥾 RandoGPX v1.4
+            🥾 RandoGPX v1.5
 
             Navigation GPX pour la randonnée.
 
-            Nouveautés depuis la v1.1 :
-            • v1.2 — Service GPS au premier plan, Départ/Pause/Reprendre,
-              sauvegarde auto toutes les 5 min + récupération après crash
-            • v1.3 — GPS adaptatif (resserré près des virages, lâche en ligne
-              droite), GPS coupé pendant les pauses
-            • v1.4 — Navigation turn-by-turn (flèches ↰ ↱ ↑, bip aux
-              bifurcations), demi-tour guidé hors tracé, bouton « Finir ici »
-              avec guidage retour au point de départ, nouvelle icône,
-              téléchargement hors-ligne corrigé (OpenTopoMap / IGN Plan)
+            Nouveautés v1.5 :
+            • Écran « À propos » avec les attributions obligatoires
+              (OpenStreetMap, OpenTopoMap, IGN, Open-Meteo, osmdroid)
+            • Infrastructure de build release signé (prêt pour Google Play) :
+              app-release.apk signé si le keystore est configuré
+            • APK debug toujours disponible pour tester
 
-            📲 Téléchargez **app-debug.apk** ci-dessous et installez-le
+            📲 Téléchargez un APK ci-dessous et installez-le
             (autoriser les applications inconnues sur le téléphone).
-          files: app/build/outputs/apk/debug/app-debug.apk
+            Pour un usage courant, préférez app-release.apk (signé).
+          files: |
+            dist/*
           make_latest: true
 
-      - name: Publier aussi en Artifact (secours)
+      - name: Publier aussi en Artifacts (secours)
         uses: actions/upload-artifact@v4
         with:
           name: RandoGPX-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: dist/*
           retention-days: 90

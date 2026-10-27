@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var btnFollow: ToggleButton
     private lateinit var btnStartPause: Button
     private lateinit var btnFinish: Button
+    private lateinit var btnAbout: Button
 
     // Panneau de navigation
     private lateinit var navPanel: View
@@ -147,6 +148,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.btnWaypoints).setOnClickListener { showWaypointDialog() }
         btnStartPause.setOnClickListener { onStartPauseClicked() }
         btnFinish.setOnClickListener { onFinishClicked() }
+        btnAbout = findViewById(R.id.btnAbout)
+        btnAbout.setOnClickListener { showAbout() }
         btnFinishHere.setOnClickListener { confirmFinishHere() }
         btnNavCollapse.setOnClickListener {
             navCollapsed = !navCollapsed
@@ -321,6 +324,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
         map.onPause()
         if (wakeLock?.isHeld == true) wakeLock?.release()
+    }
+
+    private fun showAbout() {
+        val version = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (_: Exception) { "?" }
+        AlertDialog.Builder(this)
+            .setTitle("À propos — RandoGPX v" + version)
+            .setMessage(
+                "Navigation GPX pour la randonnée — par Mathieu Bouvier.\n\n" +
+                    "https://github.com/LethargicRunner/RandoGPX\n\n" +
+                    "FONDS DE CARTE\n" +
+                    "• OpenStreetMap — © les contributeurs OpenStreetMap (ODbL)\n" +
+                    "• OpenTopoMap — © OpenTopoMap (CC-BY-SA)\n" +
+                    "• Plan IGN — © IGN, via la Géoplateforme\n\n" +
+                    "Le téléchargement massif de tuiles respecte les politiques " +
+                    "d'usage des fournisseurs : il est limité à OpenTopoMap et IGN Plan.\n\n" +
+                    "MÉTÉO\n" +
+                    "• Open-Meteo (https://open-meteo.com), sous licence CC BY 4.0\n\n" +
+                    "REMERCIEMENTS\n" +
+                    "• Bibliothèque de carte : osmdroid (Apache 2.0)"
+            )
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun showStats() {
