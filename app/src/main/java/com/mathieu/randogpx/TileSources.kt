@@ -2,6 +2,7 @@ package com.mathieu.randogpx
 
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.TileSourcePolicy
 import org.osmdroid.util.MapTileIndex
 
 object TileSources {
@@ -16,7 +17,8 @@ object TileSources {
             "https://b.tile.opentopomap.org",
             "https://c.tile.opentopomap.org"
         ),
-        "© OpenTopoMap (CC-BY-SA)"
+        "© OpenTopoMap (CC-BY-SA)",
+        TileSourcePolicy(2, 0)   // bulk autorisé, 2 téléchargements simultanés max (poli pour un serveur communautaire)
     ) {
         override fun getTileURLString(pMapTileIndex: Long): String {
             val z = MapTileIndex.getZoom(pMapTileIndex)
@@ -29,7 +31,8 @@ object TileSources {
     /** Plan IGN v2 — gratuit, sans clé, via la Géoplateforme (data.geopf.fr). */
     val IGN_PLAN: OnlineTileSourceBase = object : OnlineTileSourceBase(
         "IGN Plan", 0, 18, 256, ".png",
-        arrayOf("https://data.geopf.fr"), "© IGN"
+        arrayOf("https://data.geopf.fr"), "© IGN",
+        TileSourcePolicy(4, 0)   // bulk autorisé, 4 téléchargements simultanés max (infrastructure IGN robuste)
     ) {
         override fun getTileURLString(pMapTileIndex: Long): String {
             val z = MapTileIndex.getZoom(pMapTileIndex)
