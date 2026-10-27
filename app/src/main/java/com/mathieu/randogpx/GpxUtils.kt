@@ -1,5 +1,6 @@
 package com.mathieu.randogpx
 
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -51,6 +52,50 @@ object GpxUtils {
         return ProjectionResult(bestSeg, bestDist, cum[bestSeg] + bestAlong, cum.last())
     }
 
+    /**
+     * Prochain virage significatif sur la route devant soi.
+     * Retourne null si la route est rectiligne sur les 600 prochains mètres.
+     */
+    fun nextTurn(lat: Double, lon: Double, pts: List<Pair<Double, Double>>): TurnAhead? {
+        if (pts.size < 3) return null
+
+        var bestIdx = 0
+        var bestD = Double.MAX_VALUE
+        for (i in pts.indices) {
+            val d = distance(lat, lon, pts[i].first, pts[i].second)
+            if (d < bestD) { bestD = d; bestIdx = i }
+        }
+
+        var idx = bestIdx
+        var distFromNearest = 0.0
+        var prevBearing: Double? = null
+        while (idx < pts.size - 1 && distFromNearest < 600.0) {
+            var chunk = 0.0
+            val start = idx
+            while (idx < pts.size - 1 && chunk < 40.0) {
+                chunk += distance(
+                    pts[idx].first, pts[idx].second,
+                    pts[idx + 1].first, pts[idx + 1].second
+                )
+                idx++
+            }
+            if (chunk < 1.0) break
+            val b = bearing(pts[start].first, pts[start].second, pts[idx].first, pts[idx].second)
+            val pb = prevBearing
+            if (pb != null) {
+                var delta = b - pb
+                while (delta > 180.0) delta -= 360.0
+                while (delta < -180.0) delta += 360.0
+                if (abs(delta) > 30.0) {
+                    return TurnAhead(distFromNearest + bestD, delta > 0, idx)
+                }
+            }
+            prevBearing = b
+            distFromNearest += chunk
+        }
+        return null
+    }
+
     private fun distanceToSegment(
         pLat: Double, pLon: Double,
         aLat: Double, aLon: Double,
@@ -75,4 +120,11 @@ data class ProjectionResult(
     val distanceToTrack: Double,
     val distanceCovered: Double,
     val totalDistance: Double
+)
+
+/** Prochain virage : distance (m), direction (true = droite), index du point de virage. */
+data class TurnAhead(
+    val distanceM: Double,
+    val directionRight: Boolean,
+    val turnIndex: Int
 )
