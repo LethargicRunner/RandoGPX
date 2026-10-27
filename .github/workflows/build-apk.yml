@@ -37,14 +37,22 @@ jobs:
       - name: Publier l'APK en Release (téléchargement direct)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1
-          name: RandoGPX v1.1
+          tag_name: v1.4
+          name: RandoGPX v1.4
           body: |
-            🥾 RandoGPX v1.1
+            🥾 RandoGPX v1.4
 
-            Navigation GPX pour la randonnée : suivi GPS, alerte hors-tracé,
-            stats de parcours, waypoints, cartes OSM/OpenTopoMap/IGN,
-            mode hors-ligne, bibliothèque de GPX, journaux avec météo.
+            Navigation GPX pour la randonnée.
+
+            Nouveautés depuis la v1.1 :
+            • v1.2 — Service GPS au premier plan, Départ/Pause/Reprendre,
+              sauvegarde auto toutes les 5 min + récupération après crash
+            • v1.3 — GPS adaptatif (resserré près des virages, lâche en ligne
+              droite), GPS coupé pendant les pauses
+            • v1.4 — Navigation turn-by-turn (flèches ↰ ↱ ↑, bip aux
+              bifurcations), demi-tour guidé hors tracé, bouton « Finir ici »
+              avec guidage retour au point de départ, nouvelle icône,
+              téléchargement hors-ligne corrigé (OpenTopoMap / IGN Plan)
 
             📲 Téléchargez **app-debug.apk** ci-dessous et installez-le
             (autoriser les applications inconnues sur le téléphone).
