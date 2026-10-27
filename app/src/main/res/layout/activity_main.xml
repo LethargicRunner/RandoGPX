@@ -116,15 +116,6 @@
                 android:layout_weight="1"
                 android:text="Waypoints" />
 
-            <Button
-                android:id="@+id/btnEndHike"
-                style="?android:attr/buttonBarButtonStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_margin="2dp"
-                android:layout_weight="1"
-                android:text="Fin rando" />
-
             <ToggleButton
                 android:id="@+id/btnFollow"
                 android:layout_width="0dp"
@@ -134,6 +125,28 @@
                 android:textOn="Suivi"
                 android:textOff="Suivi"
                 android:checked="true" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnStartPause"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:text="▶ Départ" />
+
+            <Button
+                android:id="@+id/btnFinish"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:text="■ Terminer" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

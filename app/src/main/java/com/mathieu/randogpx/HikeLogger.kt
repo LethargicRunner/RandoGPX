@@ -13,6 +13,12 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+/**
+ * Journal de randonnée V2 :
+ * - gestion de la pause (durée nette, points uniquement en enregistrement)
+ * - sauvegarde automatique périodique (survit à un crash / batterie vide)
+ * - finalisation dans Documents/RandoGPX/logs/ en JSON lisible
+ */
 class HikeLogger(
     private val trackName: String,
     private val weatherAtStart: Weather.Current?
@@ -20,9 +26,15 @@ class HikeLogger(
     data class RecPoint(val lat: Double, val lon: Double, val ele: Double?, val time: Long)
 
     private val startTime = System.currentTimeMillis()
+    private var pausedMs = 0L
+    private var pauseStart: Long? = null
     private val points = mutableListOf<RecPoint>()
 
+    fun pause() { if (pauseStart == null) pauseStart = System.currentTimeMillis() }
+    fun resume() { pauseStart?.let { pausedMs += System.currentTimeMillis() - it }; pauseStart = null }
+
     fun add(lat: Double, lon: Double, ele: Double?) {
+        if (pauseStart != null) return   // pas de points pendant la pause
         if (points.isEmpty() || GpxUtils.distance(
                 points.last().lat, points.last().lon, lat, lon
             ) > 10
@@ -30,9 +42,14 @@ class HikeLogger(
     }
 
     val recorded get() = points.toList()
+    val isPaused get() = pauseStart != null
 
-    fun finish(context: Context): String {
-        val endTime = System.currentTimeMillis()
+    private fun elapsedMs(): Long {
+        val end = pauseStart ?: System.currentTimeMillis()
+        return end - startTime - pausedMs
+    }
+
+    private fun buildJson(): JSONObject {
         var dist = 0.0
         for (i in 1 until points.size) {
             dist += GpxUtils.distance(
@@ -43,14 +60,14 @@ class HikeLogger(
             points.map { TrackPoint(it.lat, it.lon, it.ele, it.time) }
         ).ascentM
 
-        val json = JSONObject().apply {
+        return JSONObject().apply {
             put("rando", trackName)
             put("debut", iso(startTime))
-            put("fin", iso(endTime))
-            put("duree_min", (endTime - startTime) / 60000)
+            put("duree_min", elapsedMs() / 60000)
             put("distance_km", Math.round(dist / 10.0) / 100.0)
             put("denivele_positif_m", asc)
             put("points_enregistres", points.size)
+            put("en_pause", pauseStart != null)
             weatherAtStart?.let {
                 put("meteo_depart", JSONObject().apply {
                     put("temperature_c", it.temperatureC)
@@ -68,39 +85,83 @@ class HikeLogger(
                 }
             })
         }
+    }
+
+    /** Sauvegarde automatique (toutes les 5 min) : fichier privé, écrasé à chaque fois. */
+    fun autosave(context: Context) {
+        try {
+            File(context.filesDir, AUTOSAVE).writeText(buildJson().toString(2))
+        } catch (_: Exception) { }
+    }
+
+    /** Termine la rando : journal final dans Documents/RandoGPX/logs/, autosave supprimé. */
+    fun finish(context: Context): String {
+        val json = buildJson()
+        val endTime = System.currentTimeMillis()
 
         val fileName = "log_" +
                 SimpleDateFormat("yyyyMMdd_HHmm", Locale.FRANCE)
                     .format(Date(startTime)) + "_" +
                 trackName.substringBeforeLast('.').replace(' ', '_') + ".json"
 
-        val bytes = json.toString(2).toByteArray()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
-                put(MediaStore.MediaColumns.RELATIVE_PATH,
-                    Environment.DIRECTORY_DOCUMENTS + "/" + GpxRepository.FOLDER + "/logs")
-            }
-            context.contentResolver.insert(
-                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values
-            )?.let { uri ->
-                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
-            }
-        } else {
-            val dir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                GpxRepository.FOLDER + "/logs"
-            ).apply { mkdirs() }
-            File(dir, fileName).writeBytes(bytes)
-        }
+        writePublic(context, fileName, json.toString(2).toByteArray())
+        File(context.filesDir, AUTOSAVE).delete()
 
+        var dist = 0.0
+        for (i in 1 until points.size) {
+            dist += GpxUtils.distance(
+                points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon
+            )
+        }
         return "Rando enregistrée : %.1f km, %d min, D+ %d m%s".format(
             dist / 1000,
-            (endTime - startTime) / 60000,
-            asc,
+            elapsedMs() / 60000,
+            TrackStats.compute(points.map { TrackPoint(it.lat, it.lon, it.ele, it.time) }).ascentM,
             weatherAtStart?.let { " | " + it.description + ", " + it.temperatureC + "°C" } ?: ""
         )
+    }
+
+    companion object {
+        private const val AUTOSAVE = "autosave_rando.json"
+
+        /** Une rando interrompue (crash/batterie) attend-elle d'être sauvée ? */
+        fun pendingAutosave(context: Context): Boolean =
+            File(context.filesDir, AUTOSAVE).exists()
+
+        /** Sauvegarde l'auto-recovery dans les journaux publics. Retourne le nom du fichier. */
+        fun finalizePending(context: Context): String? {
+            val f = File(context.filesDir, AUTOSAVE)
+            if (!f.exists()) return null
+            val name = "log_recupere_" +
+                SimpleDateFormat("yyyyMMdd_HHmm", Locale.FRANCE).format(Date()) + ".json"
+            writePublic(context, name, f.readText().toByteArray())
+            f.delete()
+            return name
+        }
+
+        fun discardPending(context: Context) { File(context.filesDir, AUTOSAVE).delete() }
+
+        private fun writePublic(context: Context, fileName: String, bytes: ByteArray) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOCUMENTS + "/" + GpxRepository.FOLDER + "/logs")
+                }
+                context.contentResolver.insert(
+                    MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values
+                )?.let { uri ->
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                }
+            } else {
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    GpxRepository.FOLDER + "/logs"
+                ).apply { mkdirs() }
+                File(dir, fileName).writeBytes(bytes)
+            }
+        }
     }
 
     private fun iso(t: Long): String = SimpleDateFormat(

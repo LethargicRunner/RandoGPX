@@ -3,6 +3,7 @@ package com.mathieu.randogpx
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -46,6 +47,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var tvInfo: TextView
     private lateinit var arrow: ImageView
     private lateinit var btnFollow: ToggleButton
+    private lateinit var btnStartPause: Button
+    private lateinit var btnFinish: Button
 
     private var track: List<TrackPoint> = emptyList()
     private var waypoints: List<Waypoint> = emptyList()
@@ -63,7 +66,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var lastAlertTime = 0L
     private var followMode = true
 
-    private var hikeLogger: HikeLogger? = null
     private var weather: Weather.Current? = null
 
     private var azimuth = 0f
@@ -82,6 +84,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (uri != null) importAndSaveGpx(uri)
         }
 
+    private val stateListener: (TrackService.State, String?) -> Unit = { st, summary ->
+        runOnUiThread {
+            syncControls()
+            summary?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().apply {
@@ -95,6 +104,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvInfo = findViewById(R.id.tvInfo)
         arrow = findViewById(R.id.compassArrow)
         btnFollow = findViewById(R.id.btnFollow)
+        btnStartPause = findViewById(R.id.btnStartPause)
+        btnFinish = findViewById(R.id.btnFinish)
 
         map.setTileSource(TileSources.OPENSTREETMAP)
         map.setMultiTouchControls(true)
@@ -108,7 +119,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.btnOffline).setOnClickListener { downloadOfflineArea() }
         findViewById<Button>(R.id.btnStats).setOnClickListener { showStats() }
         findViewById<Button>(R.id.btnWaypoints).setOnClickListener { showWaypointDialog() }
-        findViewById<Button>(R.id.btnEndHike).setOnClickListener { confirmEndHike() }
+        btnStartPause.setOnClickListener { onStartPauseClicked() }
+        btnFinish.setOnClickListener { onFinishClicked() }
         btnFollow.setOnCheckedChangeListener { _, checked ->
             followMode = checked
             if (checked) recentreOnUser()
@@ -122,12 +134,89 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "RandoGPX:keepScreenOn")
 
-        if (!hasLocationPermission()) requestPermissions.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            )
+        TrackService.stateListeners.add(stateListener)
+        syncControls()
+
+        // Une rando interrompue (crash / batterie vide) attend-elle d'être sauvée ?
+        if (HikeLogger.pendingAutosave(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("🥾 Randonnée non terminée")
+                .setMessage("Un enregistrement interrompu a été retrouvé (sauvegarde automatique).\n\nVoulez-vous le sauvegarder dans vos journaux ?")
+                .setPositiveButton("Sauvegarder") { _, _ ->
+                    val name = HikeLogger.finalizePending(this)
+                    Toast.makeText(this, "Journal récupéré : " + name, Toast.LENGTH_LONG).show()
+                }
+                .setNegativeButton("Supprimer", null)
+                .show()
+        }
+
+        if (!hasLocationPermission()) requestPermissions.launch(locationPermissions())
+    }
+
+    private fun locationPermissions(): Array<String> {
+        val perms = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            perms += Manifest.permission.POST_NOTIFICATIONS
+        }
+        return perms.toTypedArray()
+    }
+
+    // ---------- Contrôles d'enregistrement ----------
+
+    private fun onStartPauseClicked() {
+        val intent = Intent(this, TrackService::class.java)
+        when (TrackService.state) {
+            TrackService.State.IDLE -> {
+                TrackService.trackName = if (track.isNotEmpty()) trackName else "rando_libre"
+                TrackService.weather = weather
+                intent.action = TrackService.ACTION_START
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    startForegroundService(intent) else startService(intent)
+            }
+            TrackService.State.RECORDING -> {
+                intent.action = TrackService.ACTION_PAUSE
+                startService(intent)
+            }
+            TrackService.State.PAUSED -> {
+                intent.action = TrackService.ACTION_RESUME
+                startService(intent)
+            }
+        }
+    }
+
+    private fun onFinishClicked() {
+        if (TrackService.state == TrackService.State.IDLE) {
+            Toast.makeText(this, "Aucune rando en cours", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Terminer la rando ?")
+            .setMessage("Le journal (parcours réel + stats + météo) sera sauvegardé dans Documents/RandoGPX/logs/")
+            .setPositiveButton("Enregistrer") { _, _ ->
+                val intent = Intent(this, TrackService::class.java)
+                intent.action = TrackService.ACTION_STOP
+                startService(intent)
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    private fun syncControls() {
+        btnStartPause.text = when (TrackService.state) {
+            TrackService.State.IDLE -> "▶ Départ"
+            TrackService.State.RECORDING -> "⏸ Pause"
+            TrackService.State.PAUSED -> "▶ Reprendre"
+        }
+        btnFinish.isEnabled = TrackService.state != TrackService.State.IDLE
+        when (TrackService.state) {
+            TrackService.State.RECORDING ->
+                tvInfo.text = "🔴 Enregistrement en cours (" + TrackService.trackName + ")"
+            TrackService.State.PAUSED -> tvInfo.text = "⏸ Rando en pause"
+            TrackService.State.IDLE -> { }
+        }
     }
 
     override fun onResume() {
@@ -135,6 +224,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.onResume()
         wakeLock?.acquire(10 * 60 * 60 * 1000L)
         if (hasLocationPermission()) startLocationUpdates()
+        syncControls()
     }
 
     override fun onPause() {
@@ -251,7 +341,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .show()
     }
 
-    /** Estimation du nombre de tuiles couvrant une zone pour des zooms donnés. */
     private fun estimateTiles(bbox: BoundingBox, zMin: Int, zMax: Int): Long {
         var total = 0.0
         for (z in zMin..zMax) {
@@ -332,14 +421,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             tvStatus.setTextColor(android.graphics.Color.WHITE)
             map.invalidate()
 
-            hikeLogger = HikeLogger(trackName, null)
             if (track.isNotEmpty()) fetchWeather(track.first().lat, track.first().lon)
-
-            Toast.makeText(
-                this,
-                "Journal démarré — bouton « Fin rando » pour enregistrer",
-                Toast.LENGTH_LONG
-            ).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Erreur de lecture du GPX : " + e.message, Toast.LENGTH_LONG).show()
         }
@@ -351,35 +433,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             runOnUiThread {
                 weather = w
                 w?.let {
-                    hikeLogger = HikeLogger(trackName, it)
-                    tvInfo.text = "Météo : " + it.description + ", " + it.temperatureC + "°C, vent " + it.windKmh + " km/h"
+                    tvInfo.text = "Météo au départ : " + it.description + ", " + it.temperatureC + "°C, vent " + it.windKmh + " km/h"
                 } ?: Toast.makeText(
                     this, "Météo indisponible (pas de réseau)", Toast.LENGTH_SHORT
                 ).show()
             }
         }.start()
-    }
-
-    private fun confirmEndHike() {
-        val logger = hikeLogger
-        if (logger == null || logger.recorded.isEmpty()) {
-            Toast.makeText(this, "Aucune rando en cours à enregistrer", Toast.LENGTH_SHORT).show()
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Terminer la rando ?")
-            .setMessage("Le journal (parcours réel + stats + météo) sera sauvegardé dans Documents/RandoGPX/logs/")
-            .setPositiveButton("Enregistrer") { _, _ ->
-                try {
-                    val summary = logger.finish(this)
-                    Toast.makeText(this, summary, Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Erreur sauvegarde : " + e.message, Toast.LENGTH_LONG).show()
-                }
-                hikeLogger = null
-            }
-            .setNegativeButton("Annuler", null)
-            .show()
     }
 
     private fun hasLocationPermission() =
@@ -407,8 +466,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         currentAlt = if (loc.hasAltitude()) loc.altitude else currentAlt
         lastSpeed = if (loc.hasSpeed()) loc.speed else lastSpeed
 
-        hikeLogger?.add(loc.latitude, loc.longitude, currentAlt)
-
         if (userMarker == null) {
             userMarker = Marker(map).apply {
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
@@ -435,6 +492,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val lat = currentLat ?: return
         val lon = currentLon ?: return
         if (track.size < 2) return
+
+        // Pendant un enregistrement, la barre d'info reste dédiée à l'état de la rando
+        if (TrackService.state != TrackService.State.IDLE) return
 
         val proj = GpxUtils.projectOnTrack(lat, lon, track)
         val remaining = proj.totalDistance - proj.distanceCovered
