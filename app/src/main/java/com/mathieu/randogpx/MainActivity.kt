@@ -281,6 +281,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 map.invalidate()
                 Toast.makeText(this, "Carte : " + names[which], Toast.LENGTH_SHORT).show()
             }
+            .setNegativeButton("Fermer", null)
             .show()
     }
 
@@ -381,6 +382,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         try {
             val gpx = contentResolver.openInputStream(uri)?.use { GpxParser.parse(it) } ?: return
             track = gpx.track
+            TrackService.plannedTrack = track   // GPS adaptatif : le service connaît la route à venir
             waypoints = gpx.waypoints
             trackName = name.substringBeforeLast('.')
             trackStats = if (track.size > 1) TrackStats.compute(track) else null
@@ -409,7 +411,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     id = "wp"
                     position = GeoPoint(wp.lat, wp.lon)
                     title = wp.name
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    setAnchor(Marker.ACHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 }
                 map.overlays.add(m)
             }

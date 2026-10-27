@@ -14,9 +14,11 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 
 /**
- * Service GPS au premier plan (V2) :
- * l'enregistrement de la randonnée continue même si l'app est en arrière-plan
- * ou si l'écran s'éteint. Sauvegarde automatique toutes les 5 minutes.
+ * Service GPS au premier plan (V1.3) :
+ * - l'enregistrement continue même app en arrière-plan / écran éteint
+ * - GPS ADAPTATIF : 5 s à l'approche d'un virage du tracé, jusqu'à 60 s en ligne droite
+ * - sauvegarde automatique toutes les 5 minutes
+ * - GPS coupé pendant les pauses
  */
 class TrackService : Service() {
 
@@ -29,6 +31,9 @@ class TrackService : Service() {
         var weather: Weather.Current? = null
         var lastSummary: String? = null
 
+        /** Tracé GPX prévu (pour détecter virages et bifurcations à venir). */
+        var plannedTrack: List<TrackPoint> = emptyList()
+
         val stateListeners = mutableListOf<(State, String?) -> Unit>()
 
         const val ACTION_START = "com.mathieu.randogpx.START"
@@ -40,6 +45,15 @@ class TrackService : Service() {
         private const val NOTIF_ID = 1
         private const val AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000L
 
+        // ----- GPS adaptatif -----
+        const val GPS_FAST_MS = 5_000L       // virage proche (< 200 m)
+        const val GPS_NORMAL_MS = 15_000L    // virage à l'horizon (< 600 m) ou pas de tracé
+        const val GPS_SLOW_MS = 60_000L      // longue ligne droite
+        private const val TURN_ANGLE_DEG = 30.0
+        private const val TURN_LOOKAHEAD_M = 600.0
+        private const val TURN_NEAR_M = 200.0
+        private const val CHUNK_M = 40.0
+
         private fun notifyState(summary: String? = null) {
             stateListeners.forEach { it(state, summary) }
         }
@@ -47,6 +61,7 @@ class TrackService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var locationListener: android.location.LocationListener? = null
+    private var currentIntervalMs = GPS_NORMAL_MS
 
     private val autoSaveRunnable = object : Runnable {
         override fun run() {
@@ -63,12 +78,15 @@ class TrackService : Service() {
             ACTION_PAUSE -> {
                 logger?.pause()
                 state = State.PAUSED
+                stopLocationUpdates()   // économie batterie : GPS coupé en pause
                 updateNotification()
                 notifyState()
             }
             ACTION_RESUME -> {
                 logger?.resume()
                 state = State.RECORDING
+                currentIntervalMs = GPS_NORMAL_MS
+                startLocationUpdates()
                 updateNotification()
                 notifyState()
             }
@@ -81,6 +99,7 @@ class TrackService : Service() {
         logger = HikeLogger(trackName, weather)
         state = State.RECORDING
         startForegroundCompat()
+        currentIntervalMs = GPS_NORMAL_MS
         startLocationUpdates()
         handler.removeCallbacks(autoSaveRunnable)
         handler.postDelayed(autoSaveRunnable, AUTO_SAVE_INTERVAL_MS)
@@ -102,6 +121,8 @@ class TrackService : Service() {
         notifyState(lastSummary)
     }
 
+    // ---------- GPS adaptatif ----------
+
     @Suppress("MissingPermission")
     private fun startLocationUpdates() {
         val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
@@ -110,11 +131,12 @@ class TrackService : Service() {
                 loc.latitude, loc.longitude,
                 if (loc.hasAltitude()) loc.altitude else null
             )
+            adaptGpsInterval(loc.latitude, loc.longitude)
         }
         locationListener = l
         try {
             lm.requestLocationUpdates(
-                android.location.LocationManager.GPS_PROVIDER, 5000L, 5f, l
+                android.location.LocationManager.GPS_PROVIDER, currentIntervalMs, 3f, l
             )
         } catch (_: Exception) { }
     }
@@ -124,6 +146,78 @@ class TrackService : Service() {
         locationListener?.let { lm.removeUpdates(it) }
         locationListener = null
     }
+
+    /**
+     * Choisit la fréquence GPS selon la route à venir :
+     * - virage du tracé à moins de 200 m  -> 5 s
+     * - virage à moins de 600 m          -> 15 s
+     * - longue ligne droite (> 600 m)    -> 60 s
+     * - pas de tracé GPX chargé           -> 15 s fixe
+     */
+    private fun adaptGpsInterval(lat: Double, lon: Double) {
+        val desired = if (plannedTrack.size < 3) {
+            GPS_NORMAL_MS
+        } else {
+            val turnD = distanceToNextTurn(lat, lon)
+            when {
+                turnD == null -> GPS_SLOW_MS
+                turnD < TURN_NEAR_M -> GPS_FAST_MS
+                else -> GPS_NORMAL_MS
+            }
+        }
+        if (desired != currentIntervalMs) {
+            stopLocationUpdates()
+            currentIntervalMs = desired
+            startLocationUpdates()
+        }
+    }
+
+    /**
+     * Distance (en mètres) jusqu'au prochain changement de cap significatif
+     * du tracé prévu, en regardant jusqu'à TURN_LOOKAHEAD_M devant soi.
+     * Retourne null si la route est rectiligne sur toute la fenêtre.
+     */
+    private fun distanceToNextTurn(lat: Double, lon: Double): Double? {
+        val pts = plannedTrack
+        if (pts.size < 3) return null
+
+        // Point du tracé le plus proche de la position actuelle
+        var bestIdx = 0
+        var bestD = Double.MAX_VALUE
+        for (i in pts.indices) {
+            val d = GpxUtils.distance(lat, lon, pts[i].lat, pts[i].lon)
+            if (d < bestD) { bestD = d; bestIdx = i }
+        }
+
+        // Avance par tronçons de ~CHUNK_M et compare les caps successifs
+        var idx = bestIdx
+        var distFromNearest = 0.0
+        var prevBearing: Double? = null
+        while (idx < pts.size - 1 && distFromNearest < TURN_LOOKAHEAD_M) {
+            var chunk = 0.0
+            val start = idx
+            while (idx < pts.size - 1 && chunk < CHUNK_M) {
+                chunk += GpxUtils.distance(
+                    pts[idx].lat, pts[idx].lon, pts[idx + 1].lat, pts[idx + 1].lon
+                )
+                idx++
+            }
+            if (chunk < 1.0) break
+            val b = GpxUtils.bearing(
+                pts[start].lat, pts[start].lon, pts[idx].lat, pts[idx].lon
+            )
+            val pb = prevBearing
+            if (pb != null) {
+                val delta = kotlin.math.abs(((b - pb + 540.0) % 360.0) - 180.0)
+                if (delta > TURN_ANGLE_DEG) return distFromNearest + bestD
+            }
+            prevBearing = b
+            distFromNearest += chunk
+        }
+        return null
+    }
+
+    // ---------- Notification ----------
 
     private fun startForegroundCompat() {
         val notification = buildNotification()
@@ -149,8 +243,8 @@ class TrackService : Service() {
                 .createNotificationChannel(channel)
         }
         val text = when (state) {
-            State.RECORDING -> "Enregistrement en cours — " + trackName
-            State.PAUSED -> "En pause"
+            State.RECORDING -> "Enregistrement — " + trackName + " (GPS adaptatif)"
+            State.PAUSED -> "En pause (GPS coupé)"
             else -> ""
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
