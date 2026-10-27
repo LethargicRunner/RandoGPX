@@ -411,7 +411,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     id = "wp"
                     position = GeoPoint(wp.lat, wp.lon)
                     title = wp.name
-                    setAnchor(Marker.ACHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    setAnchor(0.5f, 1.0f)
                 }
                 map.overlays.add(m)
             }
@@ -470,7 +470,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         if (userMarker == null) {
             userMarker = Marker(map).apply {
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                setAnchor(0.5f, 0.5f)
                 icon = ContextCompat.getDrawable(
                     this@MainActivity, android.R.drawable.ic_menu_mylocation
                 )
