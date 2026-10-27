@@ -38,6 +38,7 @@ class TrackService : Service() {
 
         private const val CHANNEL_ID = "rando_recording"
         private const val NOTIF_ID = 1
+        private const val AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000L
 
         private fun notifyState(summary: String? = null) {
             stateListeners.forEach { it(state, summary) }
@@ -154,14 +155,10 @@ class TrackService : Service() {
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("🥾 RandoGPX")
+            .setContentTitle("RandoGPX")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
-    }
-
-    companion object {
-        private const val AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000L
     }
 }
