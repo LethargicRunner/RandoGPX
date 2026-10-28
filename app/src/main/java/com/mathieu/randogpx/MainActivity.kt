@@ -156,6 +156,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.btnCompass).setOnClickListener { showCompass() }
         findViewById<Button>(R.id.btnWeather).setOnClickListener { showForecast() }
         findViewById<Button>(R.id.btnEphemeris).setOnClickListener { showEphemeris() }
+        findViewById<Button>(R.id.btnUrgency).setOnClickListener { showEmergencyDialog() }
         btnFinishHere.setOnClickListener { confirmFinishHere() }
         btnNavCollapse.setOnClickListener {
             navCollapsed = !navCollapsed
@@ -209,13 +210,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun onStartPauseClicked() {
         val intent = Intent(this, TrackService::class.java)
         when (TrackService.state) {
-            TrackService.State.IDLE -> {
-                TrackService.trackName = if (track.isNotEmpty()) trackName else "rando_libre"
-                TrackService.weather = weather
-                intent.action = TrackService.ACTION_START
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                    startForegroundService(intent) else startService(intent)
-            }
+            TrackService.State.IDLE -> showPreDepartureCheck()
             TrackService.State.RECORDING -> {
                 intent.action = TrackService.ACTION_PAUSE
                 startService(intent)
@@ -330,6 +325,177 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
         map.onPause()
         if (wakeLock?.isHeld == true) wakeLock?.release()
+    }
+
+    /** Rappel de sécurité avant de partir : as-tu prévenu un ami ? */
+    private fun showPreDepartureCheck() {
+        val contact = Emergency.load(this)
+        val contactTxt = if (contact != null)
+            "Votre contact d'urgence : " + contact.first + " (" + contact.second + ")"
+        else
+            "⚠ Aucun contact d'urgence défini !"
+        AlertDialog.Builder(this)
+            .setTitle("🥾 Avant de partir")
+            .setMessage(
+                "Avez-vous prévenu un ami de votre randonnée ?\n\n" +
+                    "C'est indispensable si le tracé traverse des zones escarpées " +
+                    "ou sans réseau : cette personne saura où chercher et qui alerter " +
+                    "si vous ne rentrez pas.\n\n" + contactTxt
+            )
+            .setPositiveButton("Partir") { _, _ -> startRecordingIntent() }
+            .setNeutralButton("Contact") { _, _ -> showContactDialog() }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    private fun startRecordingIntent() {
+        val intent = Intent(this, TrackService::class.java)
+        TrackService.trackName = if (track.isNotEmpty()) trackName else "rando_libre"
+        TrackService.weather = weather
+        intent.action = TrackService.ACTION_START
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            startForegroundService(intent) else startService(intent)
+    }
+
+    /** Définition du contact d'urgence + SMS de procédure. */
+    private fun showContactDialog() {
+        val saved = Emergency.load(this)
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+        }
+        val inputName = android.widget.EditText(this).apply {
+            hint = "Votre prénom (pour les messages)"
+            setText(Emergency.loadUserName(this@showContactDialog))
+        }
+        val inputContact = android.widget.EditText(this).apply {
+            hint = "Prénom du contact"
+            saved?.let { setText(it.first) }
+        }
+        val inputPhone = android.widget.EditText(this).apply {
+            hint = "Numéro de téléphone (06…)"
+            saved?.let { setText(it.second) }
+            inputType = android.text.InputType.TYPE_CLASS_PHONE
+        }
+        container.addView(inputName)
+        container.addView(inputContact)
+        container.addView(inputPhone)
+        AlertDialog.Builder(this)
+            .setTitle("👤 Contact d'urgence")
+            .setMessage(
+                "La personne à joindre si vous ne terminez pas votre randonnée. " +
+                    "Un SMS de procédure s'ouvrira pour lui expliquer quoi faire " +
+                    "s'il reçoit votre SOS."
+            )
+            .setView(container)
+            .setPositiveButton("Enregistrer + SMS") { _, _ ->
+                val myName = inputName.text.toString().trim()
+                val cName = inputContact.text.toString().trim()
+                val phone = inputPhone.text.toString().trim()
+                if (myName.isEmpty() || cName.isEmpty() || phone.isEmpty()) {
+                    Toast.makeText(
+                        this, "Champs incomplets — contact non enregistré", Toast.LENGTH_SHORT
+                    ).show()
+                    return@setPositiveButton
+                }
+                Emergency.saveUserName(this, myName)
+                Emergency.save(this, cName, phone)
+                sendSms(phone, Emergency.procedureMessage(myName, cName))
+                Toast.makeText(
+                    this, "Contact enregistré — envoyez le SMS de procédure 📤", Toast.LENGTH_LONG
+                ).show()
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    private fun showEmergencyDialog() {
+        val options = arrayOf(
+            "🆘 Envoyer le SMS SOS au contact",
+            "📍 Partager ma position (WhatsApp, mail…)",
+            "📞 Appeler le 112",
+            "🗺️ Afficher mes coordonnées en grand",
+            "👤 Définir le contact d'urgence"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("🆘 Urgence")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> sendSos()
+                    1 -> sharePosition()
+                    2 -> dial112()
+                    3 -> showBigCoordinates()
+                    4 -> showContactDialog()
+                }
+            }
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
+    private fun sendSos() {
+        val contact = Emergency.load(this)
+        if (contact == null) {
+            Toast.makeText(this, "Définissez d'abord un contact d'urgence", Toast.LENGTH_LONG).show()
+            showContactDialog()
+            return
+        }
+        val myName = Emergency.loadUserName(this)
+        sendSms(contact.second, Emergency.sosMessage(myName, currentLat, currentLon, currentAlt))
+        Toast.makeText(
+            this, "SMS SOS pré-rempli pour " + contact.first + " — appuyez sur Envoyer 📤",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun sharePosition() {
+        val lat = currentLat
+        val lon = currentLon
+        if (lat == null || lon == null) {
+            Toast.makeText(this, "Pas encore de position GPS", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val text = "Ma position : " + Emergency.mapsLink(lat, lon)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startActivity(Intent.createChooser(intent, "Partager ma position"))
+    }
+
+    private fun dial112() {
+        try {
+            startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:112")))
+        } catch (_: Exception) { }
+    }
+
+    private fun showBigCoordinates() {
+        val lat = currentLat
+        val lon = currentLon
+        if (lat == null || lon == null) {
+            Toast.makeText(this, "Pas encore de position GPS", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("🗺️ Ma position (à dicter aux secours)")
+            .setMessage(
+                "%.5f".format(java.util.Locale.US, lat) + "\n" +
+                    "%.5f".format(java.util.Locale.US, lon) + "\n" +
+                    (currentAlt?.let { "Altitude : " + it.toInt() + " m" } ?: "") + "\n\n" +
+                    Emergency.mapsLink(lat, lon)
+            )
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun sendSms(phone: String, body: String) {
+        try {
+            val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:" + phone))
+            intent.putExtra("sms_body", body)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Impossible d'ouvrir les SMS : " + e.message, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun showCompass() {

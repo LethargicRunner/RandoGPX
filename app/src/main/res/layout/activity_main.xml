@@ -240,6 +240,15 @@
                 android:layout_margin="2dp"
                 android:layout_weight="1"
                 android:text="🌙 Éphémérides" />
+
+            <Button
+                android:id="@+id/btnUrgency"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="2dp"
+                android:layout_weight="1"
+                android:text="🆘 Urgence" />
         </LinearLayout>
 
             <Button

@@ -60,14 +60,20 @@ jobs:
       - name: Publier les APK en Release (téléchargement direct)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6
-          name: RandoGPX v1.6
+          tag_name: v1.7
+          name: RandoGPX v1.7
           body: |
-            🥾 RandoGPX v1.6
+            🥾 RandoGPX v1.7
 
             Navigation GPX pour la randonnée.
 
-            Nouveautés v1.6 :
+            Nouveautés v1.7 :
+            • Rappel de sécurité au Départ : « avez-vous prévenu un ami ? »
+            • Contact d'urgence : définition + SMS de procédure expliquant
+              quoi faire en cas de réception d'un SOS
+            • Bouton Urgence : SMS SOS avec coordonnées GPS et lien carte,
+              partage de position, appel 112, coordonnées en grand
+            • v1.6 (rappel) :
             • Boussole d'orientation : cadran, cap en degrés, cardinal,
               direction et distance du prochain waypoint
             • Prévisions météo sur 7 jours (Open-Meteo)
