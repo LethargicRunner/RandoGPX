@@ -215,6 +215,34 @@
             android:orientation="horizontal">
 
             <Button
+                android:id="@+id/btnCompass"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="2dp"
+                android:layout_weight="1"
+                android:text="🧭 Boussole" />
+
+            <Button
+                android:id="@+id/btnWeather"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="2dp"
+                android:layout_weight="1"
+                android:text="☁️ Météo" />
+
+            <Button
+                android:id="@+id/btnEphemeris"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="2dp"
+                android:layout_weight="1"
+                android:text="🌙 Éphémérides" />
+        </LinearLayout>
+
+            <Button
                 android:id="@+id/btnStartPause"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"

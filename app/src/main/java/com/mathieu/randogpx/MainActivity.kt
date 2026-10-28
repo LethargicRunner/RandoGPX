@@ -50,6 +50,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var btnStartPause: Button
     private lateinit var btnFinish: Button
     private lateinit var btnAbout: Button
+    private var compassDial: ImageView? = null
+    private var compassText: TextView? = null
+    private val CARDINALS = arrayOf("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 
     // Panneau de navigation
     private lateinit var navPanel: View
@@ -150,6 +153,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         btnFinish.setOnClickListener { onFinishClicked() }
         btnAbout = findViewById(R.id.btnAbout)
         btnAbout.setOnClickListener { showAbout() }
+        findViewById<Button>(R.id.btnCompass).setOnClickListener { showCompass() }
+        findViewById<Button>(R.id.btnWeather).setOnClickListener { showForecast() }
+        findViewById<Button>(R.id.btnEphemeris).setOnClickListener { showEphemeris() }
         btnFinishHere.setOnClickListener { confirmFinishHere() }
         btnNavCollapse.setOnClickListener {
             navCollapsed = !navCollapsed
@@ -324,6 +330,133 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
         map.onPause()
         if (wakeLock?.isHeld == true) wakeLock?.release()
+    }
+
+    private fun showCompass() {
+        val density = resources.displayMetrics.density
+        val pad = (16 * density).toInt()
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        }
+        val dial = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_compass)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                (220 * density).toInt(), (220 * density).toInt()
+            )
+        }
+        val text = TextView(this).apply {
+            textSize = 20f
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, pad, 0, 0)
+        }
+        container.addView(dial)
+        container.addView(text)
+        compassDial = dial
+        compassText = text
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("🧭 Boussole")
+            .setView(container)
+            .setPositiveButton("Fermer", null)
+            .show()
+        dialog.setOnDismissListener {
+            compassDial = null
+            compassText = null
+        }
+        updateCompassViews()
+    }
+
+    private fun updateCompassViews() {
+        val heading = ((azimuth % 360f) + 360f) % 360f
+        compassDial?.rotation = -heading
+        val card = CARDINALS[(Math.round(heading / 45f).toInt() % 8 + 8) % 8]
+        val lat = currentLat
+        val lon = currentLon
+        val wp = nextWp
+        val wpLine = if (wp != null && lat != null && lon != null) {
+            val b = GpxUtils.bearing(lat, lon, wp.lat, wp.lon)
+            val d = GpxUtils.distance(lat, lon, wp.lat, wp.lon)
+            "\nVers " + wp.name + " : " + "%.0f°".format(java.util.Locale.US, b) + " — " + d.toKm()
+        } else ""
+        compassText?.text =
+            "%.0f° (%s)".format(java.util.Locale.US, heading.toDouble(), card) + wpLine
+    }
+
+    private fun showForecast() {
+        val lat = currentLat ?: track.firstOrNull()?.lat
+        val lon = currentLon ?: track.firstOrNull()?.lon
+        if (lat == null || lon == null) {
+            Toast.makeText(this, "Position indisponible — dehors ou avec un GPX", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "Chargement des prévisions…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val days = Weather.fetchForecast(lat, lon)
+            runOnUiThread {
+                if (days == null) {
+                    Toast.makeText(this, "Météo indisponible (pas de réseau)", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                val todayIso = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                    .format(java.util.Date())
+                val sb = StringBuilder()
+                days.forEach { d ->
+                    val label = if (d.date == todayIso) "Aujourd'hui" else formatDateShort(d.date)
+                    sb.append(label).append(" : ")
+                        .append(Weather.codeEmoji(d.code)).append(" ")
+                        .append(d.tmin.toInt()).append("° / ").append(d.tmax.toInt()).append("°")
+                        .append(", pluie ").append(d.precipProb).append("%\n")
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("☁️ Prévisions météo (7 jours)")
+                    .setMessage(sb.toString().trim() + "\n\nSource : Open-Meteo")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun formatDateShort(iso: String): String = try {
+        val parsed = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(iso)
+        val out = java.text.SimpleDateFormat("EEE d", java.util.Locale.FRENCH)
+        out.format(parsed)
+    } catch (_: Exception) { iso }
+
+    private fun showEphemeris() {
+        val lat = currentLat ?: track.firstOrNull()?.lat
+        val lon = currentLon ?: track.firstOrNull()?.lon
+        if (lat == null || lon == null) {
+            Toast.makeText(this, "Position indisponible — dehors ou avec un GPX", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val now = System.currentTimeMillis()
+        val (sunrise, sunset) = Ephemeris.sunTimes(lat, lon, now)
+        val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val sb = StringBuilder()
+        sb.append("🌅 Lever du soleil : ")
+            .append(if (sunrise != null) fmt.format(java.util.Date(sunrise)) else "—").append("\n")
+        sb.append("🌇 Coucher du soleil : ")
+            .append(if (sunset != null) fmt.format(java.util.Date(sunset)) else "—").append("\n")
+        if (sunrise != null && sunset != null) {
+            sb.append("⏱️ Durée du jour : ").append(formatDuration(sunset - sunrise)).append("\n")
+            if (now >= sunrise && now <= sunset) {
+                sb.append("\n✅ Il reste ").append(formatDuration(sunset - now)).append(" de lumière")
+            }
+        }
+        val phase = Ephemeris.moonPhase(now)
+        sb.append("\n🌙 ").append(Ephemeris.moonName(phase))
+            .append(" (").append(Ephemeris.moonIllumination(phase)).append("% éclairée)")
+        AlertDialog.Builder(this)
+            .setTitle("🌙 Éphémérides du jour")
+            .setMessage(sb.toString())
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val totalMin = ms / 60000
+        return (totalMin / 60).toString() + " h " + (totalMin % 60).toString().padStart(2, '0')
     }
 
     private fun showAbout() {
@@ -807,6 +940,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         SensorManager.getRotationMatrixFromVector(r, event.values)
         SensorManager.getOrientation(r, orientation)
         azimuth = Math.toDegrees(orientation[0].toDouble()).toFloat()
+
+        updateCompassViews()
 
         val bearing = targetBearing ?: return
         val rotation = ((bearing - azimuth + 360) % 360).toFloat()
