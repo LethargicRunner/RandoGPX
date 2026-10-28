@@ -4,6 +4,14 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v1.12
+
+Nouveautés v1.12 :
+• Mode d'emploi complet intégré dans l'app : bouton ⓘ → « Mode d'emploi »
+• 8 chapitres (démarrage, écran, enregistrement, navigation, cartes
+  hors-ligne, mode nuit, outils, sécurité) + FAQ de 12 questions
+• Copie GitHub : MODE_EMPLOI.md
+
 ## v1.11
 
 Nouveautés v1.11 :

@@ -795,6 +795,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (root != null) for (i in 0 until root.childCount) walk(root.getChildAt(i))
     }
 
+    /** 📖 Mode d'emploi complet + FAQ. */
+    private fun showManual() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val scroll = android.widget.ScrollView(this)
+        val tv = TextView(this).apply {
+            text = Help.manual()
+            setPadding(pad, pad, pad, pad)
+            setTextIsSelectable(true)
+        }
+        scroll.addView(tv)
+        AlertDialog.Builder(this)
+            .setTitle("📖 Mode d'emploi")
+            .setView(scroll)
+            .setPositiveButton("Fermer", null)
+            .show()
+    }
+
     private fun showAbout() {
         val version = try {
             packageManager.getPackageInfo(packageName, 0).versionName
@@ -815,6 +832,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     "REMERCIEMENTS\n" +
                     "• Bibliothèque de carte : osmdroid (Apache 2.0)"
             )
+            .setNeutralButton("📖 Mode d'emploi") { _, _ -> showManual() }
             .setPositiveButton("OK", null)
             .show()
     }
