@@ -60,14 +60,23 @@ jobs:
       - name: Publier les APK en Release (téléchargement direct)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7
-          name: RandoGPX v1.7
+          tag_name: v1.8
+          name: RandoGPX v1.8
           body: |
-            🥾 RandoGPX v1.7
+            🥾 RandoGPX v1.8
 
             Navigation GPX pour la randonnée.
 
-            Nouveautés v1.7 :
+            Nouveautés v1.8 :
+            • Export GPX automatique du parcours réel en fin de rando
+              (Documents/RandoGPX — visible dans « Mes GPX »)
+            • Trace du parcours dessinée en direct, visible aussi en
+              usage libre (sans GPX importé)
+            • Nouveau marqueur de position : pastille bleue à anneau
+              blanc, bien plus visible
+            • Déplacer la carte coupe le suivi automatiquement : le
+              bouton « Suivi » sert à se recentrer
+            • v1.7 (rappel) :
             • Rappel de sécurité au Départ : « avez-vous prévenu un ami ? »
             • Contact d'urgence : définition + SMS de procédure expliquant
               quoi faire en cas de réception d'un SOS

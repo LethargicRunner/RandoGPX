@@ -27,6 +27,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.cachemanager.CacheManager
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -72,6 +75,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var userMarker: Marker? = null
     private var trackLine: Polyline? = null
     private var returnLine: Polyline? = null
+    private var recordLine: Polyline? = null
+    private var recenteringUntil = 0L
     private var nextWp: Waypoint? = null
 
     private var currentLat: Double? = null
@@ -140,6 +145,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.setTileSource(TileSources.OPENSTREETMAP)
         map.setMultiTouchControls(true)
         map.controller.setZoom(16.0)
+        // Déplacement manuel de la carte : on coupe le suivi pour laisser explorer
+        map.addMapListener(object : MapListener {
+            override fun onScroll(event: ScrollEvent?): Boolean {
+                if (followMode && System.currentTimeMillis() > recenteringUntil) {
+                    followMode = false
+                    btnFollow.isChecked = false
+                }
+                return false
+            }
+            override fun onZoom(event: ZoomEvent?): Boolean = false
+        })
 
         findViewById<Button>(R.id.btnImport).setOnClickListener {
             openGpx.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml", "*/*"))
@@ -349,6 +365,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun startRecordingIntent() {
+        walkedPoints.clear()
+        recordLine?.let { map.overlays.remove(it); recordLine = null }
         val intent = Intent(this, TrackService::class.java)
         TrackService.trackName = if (track.isNotEmpty()) trackName else "rando_libre"
         TrackService.weather = weather
@@ -926,11 +944,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
+        // Trace du parcours réel, dessinée en direct (visible aussi en usage libre)
+        if (TrackService.state == TrackService.State.RECORDING && walkedPoints.size >= 2) {
+            if (recordLine == null) {
+                recordLine = Polyline(map).apply {
+                    outlinePaint.color = android.graphics.Color.rgb(255, 87, 34)
+                    outlinePaint.strokeWidth = 7f
+                }
+                map.overlays.add(recordLine)
+            }
+            recordLine?.setPoints(walkedPoints.map { GeoPoint(it.first, it.second) })
+        }
+
         if (userMarker == null) {
             userMarker = Marker(map).apply {
                 setAnchor(0.5f, 0.5f)
                 icon = ContextCompat.getDrawable(
-                    this@MainActivity, android.R.drawable.ic_menu_mylocation
+                    this@MainActivity, R.drawable.ic_position
                 )
                 map.overlays.add(this)
             }
@@ -945,6 +975,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun recentreOnUser() {
         val lat = currentLat ?: return
         val lon = currentLon ?: return
+        recenteringUntil = System.currentTimeMillis() + 1500
         map.post { map.controller.animateTo(GeoPoint(lat, lon)) }
     }
 

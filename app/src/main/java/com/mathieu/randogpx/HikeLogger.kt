@@ -87,6 +87,31 @@ class HikeLogger(
         }
     }
 
+    /** Export GPX standard du parcours réel (gpx.studio, Visorando…). */
+    private fun buildGpx(): String {
+        val sb = StringBuilder()
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        sb.append("<gpx version=\"1.1\" creator=\"RandoGPX\" ")
+            .append("xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
+        sb.append("  <metadata>\n    <name>")
+            .append(xmlEscape(trackName)).append("</name>\n    <time>")
+            .append(iso(startTime)).append("</time>\n  </metadata>\n")
+        sb.append("  <trk>\n    <name>")
+            .append(xmlEscape(trackName)).append("</name>\n    <trkseg>\n")
+        points.forEach { p ->
+            sb.append("      <trkpt lat=\"").append(p.lat).append("\" lon=\"")
+                .append(p.lon).append("\">")
+            p.ele?.let { sb.append("<ele>").append(it).append("</ele>") }
+            sb.append("<time>").append(iso(p.time)).append("</time>")
+            sb.append("</trkpt>\n")
+        }
+        sb.append("    </trkseg>\n  </trk>\n</gpx>\n")
+        return sb.toString()
+    }
+
+    private fun xmlEscape(s: String): String =
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
     /** Sauvegarde automatique (toutes les 5 min) : fichier privé, écrasé à chaque fois. */
     fun autosave(context: Context) {
         try {
@@ -106,6 +131,17 @@ class HikeLogger(
 
         writePublic(context, fileName, json.toString(2).toByteArray())
         File(context.filesDir, AUTOSAVE).delete()
+
+        // Export GPX du parcours réel : rangé dans Documents/RandoGPX,
+        // visible dans « Mes GPX », partageable et réimportable
+        if (points.size >= 2) {
+            try {
+                val gpxName = "rando_" +
+                    SimpleDateFormat("yyyyMMdd_HHmm", Locale.FRANCE).format(Date(startTime)) +
+                    "_" + trackName.substringBeforeLast('.').replace(' ', '_')
+                GpxRepository.save(context, gpxName, buildGpx().toByteArray())
+            } catch (_: Exception) { }
+        }
 
         var dist = 0.0
         for (i in 1 until points.size) {
