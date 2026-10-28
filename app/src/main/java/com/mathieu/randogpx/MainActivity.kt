@@ -365,13 +365,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Toast.makeText(this, "🧭 Guidage retour activé", Toast.LENGTH_LONG).show()
     }
 
-    /** Menu escamotable : masque les rangées de boutons pour libérer la carte. */
+    /**
+     * Menu escamotable : masque les boutons secondaires pour libérer la carte.
+     * 🆘 Urgence, ▶ Départ/Pause et ■ Terminer restent toujours accessibles.
+     */
     private fun syncMenu() {
         val bottom = findViewById<android.view.ViewGroup>(R.id.bottomBar)
         for (i in 0 until bottom.childCount) {
             val c = bottom.getChildAt(i)
-            if (c.id != R.id.navPanel && c.id != R.id.btnMenuToggle)
-                c.visibility = if (menuCollapsed) View.GONE else View.VISIBLE
+            when (c.id) {
+                R.id.navPanel, R.id.btnMenuToggle, R.id.rowRun -> { }
+                R.id.rowTools -> {
+                    // seuls les boutons secondaires disparaissent, Urgence reste
+                    val row = c as android.view.ViewGroup
+                    for (j in 0 until row.childCount)
+                        row.getChildAt(j).visibility =
+                            if (menuCollapsed && j < row.childCount - 1) View.GONE else View.VISIBLE
+                }
+                else -> c.visibility = if (menuCollapsed) View.GONE else View.VISIBLE
+            }
         }
         findViewById<Button>(R.id.btnMenuToggle).text =
             if (menuCollapsed) "▲ Menu" else "▾ Masquer"

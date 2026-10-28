@@ -4,6 +4,12 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v1.11
+
+Nouveautés v1.11 :
+• Menu escamotable plus sûr : quand le menu est masqué, 🆘 Urgence
+  (pleine largeur), ▶ Départ/Pause et ■ Terminer restent visibles
+
 ## v1.10.1
 
 Correctif : l'app s'arrêtait systématiquement au lancement.
