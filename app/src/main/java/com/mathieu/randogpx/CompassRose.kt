@@ -11,7 +11,9 @@ import android.view.View
  * graduations tous les 15°, points cardinaux — dessinée à la main (hors-ligne).
  * rotationDeg oriente la rose : 0 = nord vers le haut de l'écran.
  */
-class CompassRose(context: Context) : View(context) {
+class CompassRose : View {
+    constructor(context: Context) : super(context)
+    constructor(context: Context, attrs: android.util.AttributeSet?) : super(context, attrs)
 
     private val circle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(20, 30, 26); style = Paint.Style.FILL

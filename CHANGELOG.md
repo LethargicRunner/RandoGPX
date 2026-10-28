@@ -4,6 +4,12 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v1.10.1
+
+Correctif : l'app s'arrêtait systématiquement au lancement.
+• CompassRose (mini-boussole) : ajout du constructeur XML requis
+  par l'inflateur de layout (Context, AttributeSet)
+
 ## v1.10
 
 🥾 RandoGPX v1.10
