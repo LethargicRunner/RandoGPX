@@ -59,7 +59,7 @@ jobs:
 
       - name: Lire la version (automatique)
         id: version
-        run: echo "version=$(grep -oP 'versionName = \"\\K[\"]+' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(grep 'versionName' app/build.gradle.kts | cut -d'\"' -f2)" >> "$GITHUB_OUTPUT"
 
       - name: Extraire les notes de la dernière version
         run: |
