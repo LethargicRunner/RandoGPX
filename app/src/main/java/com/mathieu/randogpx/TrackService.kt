@@ -31,6 +31,9 @@ class TrackService : Service() {
         var weather: Weather.Current? = null
         var lastSummary: String? = null
 
+        /** V1.10 : vrai = la prochaine finalisation est jetée (trajet quasi vide). */
+        var discardNextSave = false
+
         /** Tracé GPX prévu (pour détecter virages et bifurcations à venir). */
         var plannedTrack: List<TrackPoint> = emptyList()
 
@@ -107,8 +110,15 @@ class TrackService : Service() {
     }
 
     private fun stopRecording() {
+        val discard = discardNextSave
+        discardNextSave = false
         lastSummary = try {
-            logger?.finish(this)
+            if (discard) {
+                logger?.discard(this)
+                "Sortie abandonnée : rien n'a été sauvegardé"
+            } else {
+                logger?.finish(this)
+            }
         } catch (e: Exception) {
             "Erreur lors de l'enregistrement : " + e.message
         }

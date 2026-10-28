@@ -53,8 +53,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var btnStartPause: Button
     private lateinit var btnFinish: Button
     private lateinit var btnAbout: Button
-    private var compassDial: ImageView? = null
+    private var compassDial: CompassRose? = null
     private var compassText: TextView? = null
+    private lateinit var miniCompass: CompassRose
     private val CARDINALS = arrayOf("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 
     // Panneau de navigation
@@ -66,6 +67,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var btnFinishHere: Button
     private lateinit var btnNavCollapse: Button
     private var navCollapsed = false
+    private var menuCollapsed = false
 
     private var track: List<TrackPoint> = emptyList()
     private var waypoints: List<Waypoint> = emptyList()
@@ -136,6 +138,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvStatus = findViewById(R.id.tvStatus)
         tvInfo = findViewById(R.id.tvInfo)
         arrow = findViewById(R.id.compassArrow)
+        miniCompass = findViewById(R.id.miniCompass)
         btnFollow = findViewById(R.id.btnFollow)
         btnStartPause = findViewById(R.id.btnStartPause)
         btnFinish = findViewById(R.id.btnFinish)
@@ -187,6 +190,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         btnFollow.setOnCheckedChangeListener { _, checked ->
             followMode = checked
             if (checked) recentreOnUser()
+        }
+
+        findViewById<Button>(R.id.btnMenuToggle).setOnClickListener {
+            menuCollapsed = !menuCollapsed
+            syncMenu()
         }
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
@@ -266,14 +274,39 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Toast.makeText(this, "Aucune rando en cours", Toast.LENGTH_SHORT).show()
             return
         }
+        val stopIntent = Intent(this, TrackService::class.java).apply {
+            action = TrackService.ACTION_STOP
+        }
+        var walked = 0.0
+        for (i in 1 until walkedPoints.size) {
+            walked += GpxUtils.distance(
+                walkedPoints[i - 1].first, walkedPoints[i - 1].second,
+                walkedPoints[i].first, walkedPoints[i].second
+            )
+        }
+        // Trajet quasi vide (démarrage par erreur, retour immédiat…) :
+        // on demande si ça vaut le coup de sauvegarder.
+        if (walked < 50) {
+            AlertDialog.Builder(this)
+                .setTitle("Trajet quasi vide")
+                .setMessage(
+                    "Vous n'avez presque pas bougé (" + walked.toInt() + " m).\n\n" +
+                        "Voulez-vous tout de même enregistrer cette sortie ?"
+                )
+                .setPositiveButton("Enregistrer") { _, _ -> startService(stopIntent) }
+                .setNeutralButton("Ne pas enregistrer") { _, _ ->
+                    TrackService.discardNextSave = true
+                    startService(stopIntent)
+                    Toast.makeText(this, "Sortie abandonnée — rien de sauvegardé", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Annuler", null)
+                .show()
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle("Terminer la rando ?")
             .setMessage("Le journal (parcours réel + stats + météo) sera sauvegardé dans Documents/RandoGPX/logs/")
-            .setPositiveButton("Enregistrer") { _, _ ->
-                val intent = Intent(this, TrackService::class.java)
-                intent.action = TrackService.ACTION_STOP
-                startService(intent)
-            }
+            .setPositiveButton("Enregistrer") { _, _ -> startService(stopIntent) }
             .setNegativeButton("Annuler", null)
             .show()
     }
@@ -330,6 +363,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvNavDist.text = ""
         beep()
         Toast.makeText(this, "🧭 Guidage retour activé", Toast.LENGTH_LONG).show()
+    }
+
+    /** Menu escamotable : masque les rangées de boutons pour libérer la carte. */
+    private fun syncMenu() {
+        val bottom = findViewById<android.view.ViewGroup>(R.id.bottomBar)
+        for (i in 0 until bottom.childCount) {
+            val c = bottom.getChildAt(i)
+            if (c.id != R.id.navPanel && c.id != R.id.btnMenuToggle)
+                c.visibility = if (menuCollapsed) View.GONE else View.VISIBLE
+        }
+        findViewById<Button>(R.id.btnMenuToggle).text =
+            if (menuCollapsed) "▲ Menu" else "▾ Masquer"
     }
 
     private fun syncNavPanel() {
@@ -547,8 +592,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             setPadding(pad, pad, pad, pad)
             gravity = android.view.Gravity.CENTER_HORIZONTAL
         }
-        val dial = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_compass)
+        val dial = CompassRose(this).apply {
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 (220 * density).toInt(), (220 * density).toInt()
             )
@@ -576,7 +620,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun updateCompassViews() {
         val heading = ((azimuth % 360f) + 360f) % 360f
-        compassDial?.rotation = -heading
+        compassDial?.rotationDeg = -heading
+        compassDial?.invalidate()
+        miniCompass.rotationDeg = -heading
+        miniCompass.invalidate()
         val card = CARDINALS[(Math.round(heading / 45f).toInt() % 8 + 8) % 8]
         val lat = currentLat
         val lon = currentLon

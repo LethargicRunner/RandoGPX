@@ -119,6 +119,11 @@ class HikeLogger(
         } catch (_: Exception) { }
     }
 
+    /** Abandonne la rando sans rien écrire (trajet quasi vide). */
+    fun discard(context: Context) {
+        File(context.filesDir, AUTOSAVE).delete()
+    }
+
     /** Termine la rando : journal final dans Documents/RandoGPX/logs/, autosave supprimé. */
     fun finish(context: Context): String {
         val json = buildJson()
