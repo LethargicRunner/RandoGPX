@@ -251,6 +251,11 @@
                 android:text="🆘 Urgence" />
         </LinearLayout>
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
             <Button
                 android:id="@+id/btnStartPause"
                 android:layout_width="0dp"
