@@ -7,7 +7,7 @@ object Help {
     fun manual(): String = MANUAL
 
     private val MANUAL =
-```🥾 RANDOGPX — MODE D'EMPLOI
+"""🥾 RANDOGPX — MODE D'EMPLOI
 
 ═══════════════════════════════
 1. DÉMARRER EN 30 SECONDES
@@ -91,7 +91,7 @@ R. Le premier fix GPS peut prendre 1 à 2 minutes, surtout en forêt ou en ville
 Q. La carte ne se recentre plus sur moi !
 R. Vous avez déplacé la carte à la main : le suivi s'est coupé volontairement. Appuyez sur « Suivi ».
 
-Q. Le mode nuit s'active alors que je suis en after-ski bien éclairé.
+Q. Le mode nuit s'active alors que je suis en intérieur bien éclairé.
 R. Il suit le vrai coucher du soleil de votre position. Pour forcer : Cartes → 🌙 Mode nuit.
 
 Q. Comment créer mon propre GPX ?
@@ -109,5 +109,5 @@ R. Téléchargez le dernier APK sur github.com/LethargicRunner/RandoGPX (section
 Q. Puis-je couper le réseau pendant la rando ?
 R. Oui, après avoir téléchargé la zone en hors-ligne. GPS, navigation, boussole, éphémérides et enregistrement fonctionnent sans réseau ; seule la météo en a besoin.
 
-Bonne rando ! 🥾```
+Bonne rando ! 🥾"""
 }
