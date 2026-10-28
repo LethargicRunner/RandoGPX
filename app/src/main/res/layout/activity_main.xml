@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:layout_margin="8dp"
-        android:background="#E6181616"
+        android:background="#E61A2E24"
         android:orientation="vertical"
         android:padding="10dp">
 
@@ -45,11 +45,12 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/bottomBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:background="#CC101010">
+        android:background="#CC14231C">
 
         <LinearLayout
             android:id="@+id/navPanel"
@@ -57,7 +58,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#E60D3B2E"
+            android:background="#E61E5A46"
             android:padding="6dp"
             android:visibility="gone">
 

@@ -95,6 +95,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private var weather: Weather.Current? = null
 
+    // Mode nuit : 0 = auto (lever/coucher du soleil), 1 = nuit forcée, 2 = jour forcé
+    private var nightPref = 0
+    private var isNight = false
+    private var nightHandler: android.os.Handler? = null
+    private var nightLoop: Runnable? = null
+
     private var azimuth = 0f
     private var targetBearing: Double? = null
     private lateinit var sensorManager: SensorManager
@@ -194,6 +200,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         TrackService.stateListeners.add(stateListener)
         syncControls()
 
+        // Mode nuit : application au démarrage puis contrôle toutes les minutes
+        nightHandler = android.os.Handler(mainLooper)
+        nightLoop = object : Runnable {
+            override fun run() {
+                applyNightMode()
+                nightHandler?.postDelayed(this, 60000L)
+            }
+        }
+        applyNightMode(true)
+        nightHandler?.post(nightLoop!!)
+
         // Une rando interrompue (crash / batterie vide) attend-elle d'être sauvée ?
         if (HikeLogger.pendingAutosave(this)) {
             AlertDialog.Builder(this)
@@ -208,6 +225,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         if (!hasLocationPermission()) requestPermissions.launch(locationPermissions())
+    }
+
+    override fun onDestroy() {
+        nightLoop?.let { nightHandler?.removeCallbacks(it) }
+        TrackService.stateListeners.remove(stateListener)
+        super.onDestroy()
     }
 
     private fun locationPermissions(): Array<String> {
@@ -643,6 +666,76 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return (totalMin / 60).toString() + " h " + (totalMin % 60).toString().padStart(2, '0')
     }
 
+    // ---------- Mode nuit ----------
+
+    /** Nuit = soleil couché (NOAA, hors-ligne) selon la position actuelle. */
+    private fun computeNight(): Boolean {
+        if (nightPref == 1) return true
+        if (nightPref == 2) return false
+        val lat = currentLat ?: track.firstOrNull()?.lat ?: return isNight
+        val lon = currentLon ?: track.firstOrNull()?.lon ?: return isNight
+        val now = System.currentTimeMillis()
+        val (sunrise, sunset) = Ephemeris.sunTimes(lat, lon, now)
+        if (sunrise == null || sunset == null) return isNight
+        return now < sunrise || now > sunset
+    }
+
+    /**
+     * Applique le mode nuit : filtre sombre ambré sur les tuiles de la carte
+     * (fonctionne aussi sur les cartes hors-ligne) + interface ambrée pour
+     * préserver la vision nocturne.
+     */
+    private fun applyNightMode(force: Boolean = false) {
+        val night = computeNight()
+        if (night == isNight && !force) return
+        val changed = night != isNight
+        isNight = night
+        try {
+            map.overlayManager.tilesOverlay.setColorFilter(
+                if (night)
+                    android.graphics.PorterDuffColorFilter(0xFF6B5A3E.toInt(), android.graphics.PorterDuff.Mode.MULTIPLY)
+                else null
+            )
+        } catch (_: Exception) { }
+        map.invalidate()
+        tintUi(night)
+        if (changed) Toast.makeText(
+            this,
+            if (night) "🌙 Mode nuit activé (soleil couché)" else "☀️ Mode jour activé (soleil levé)",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun nightLabel(): String = when (nightPref) {
+        1 -> "🌙 Mode nuit : nuit forcée"
+        2 -> "🌙 Mode nuit : jour forcé"
+        else -> "🌙 Mode nuit : auto (au coucher du soleil)"
+    }
+
+    /** Teinte l'interface : tons ambrés la nuit, palette rando le jour. */
+    private fun tintUi(night: Boolean) {
+        val panel = if (night) 0xF20E0B06.toInt() else 0xE61A2E24.toInt()
+        val bar = if (night) 0xF2120D07.toInt() else 0xCC14231C.toInt()
+        val navBg = if (night) 0xF233250F.toInt() else 0xE61E5A46.toInt()
+        val btnBg = if (night) 0xFF2A2014.toInt() else 0xFF2F4A3A.toInt()
+        val btnTxt = if (night) 0xFFFFC77D.toInt() else 0xFFF2EAD8.toInt()
+        val txt = if (night) 0xFFE6C88A.toInt() else 0xFFE6E1D5.toInt()
+        findViewById<View>(R.id.infoPanel).setBackgroundColor(panel)
+        findViewById<View>(R.id.bottomBar).setBackgroundColor(bar)
+        navPanel.setBackgroundColor(navBg)
+        val root = findViewById<android.view.ViewGroup>(android.R.id.content)
+        fun walk(v: View) {
+            if (v is Button) {
+                try { v.background.mutate().setTint(btnBg) } catch (_: Exception) { }
+                v.setTextColor(btnTxt)
+            } else if (v is TextView && v.id != R.id.tvStatus) {
+                v.setTextColor(txt)
+            }
+            if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        if (root != null) for (i in 0 until root.childCount) walk(root.getChildAt(i))
+    }
+
     private fun showAbout() {
         val version = try {
             packageManager.getPackageInfo(packageName, 0).versionName
@@ -707,13 +800,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             TileSources.OPENTOPOMAP,
             TileSources.IGN_PLAN
         )
-        val names = sources.map { TileSources.nameOf(it) }.toTypedArray()
+        val labels = sources.map { TileSources.nameOf(it) }.toMutableList()
+        labels.add(nightLabel())
         AlertDialog.Builder(this)
             .setTitle("Fond de carte")
-            .setItems(names) { _, which ->
-                map.setTileSource(sources[which])
-                map.invalidate()
-                Toast.makeText(this, "Carte : " + names[which], Toast.LENGTH_SHORT).show()
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == labels.size - 1) {
+                    nightPref = (nightPref + 1) % 3
+                    applyNightMode(true)
+                    Toast.makeText(this, nightLabel(), Toast.LENGTH_SHORT).show()
+                } else {
+                    map.setTileSource(sources[which])
+                    map.invalidate()
+                    Toast.makeText(this, "Carte : " + labels[which], Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton("Fermer", null)
             .show()
@@ -933,6 +1033,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         currentLon = loc.longitude
         currentAlt = if (loc.hasAltitude()) loc.altitude else currentAlt
         lastSpeed = if (loc.hasSpeed()) loc.speed else lastSpeed
+
+        // Premier fix GPS : bascule en mode nuit si le soleil est couché
+        applyNightMode()
 
         // Mémorise le chemin réellement parcouru (pour le guidage retour)
         if (TrackService.state == TrackService.State.RECORDING) {
