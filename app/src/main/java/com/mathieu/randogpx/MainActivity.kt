@@ -367,7 +367,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         val inputName = android.widget.EditText(this).apply {
             hint = "Votre prénom (pour les messages)"
-            setText(Emergency.loadUserName(this@showContactDialog))
+            setText(Emergency.loadUserName(applicationContext))
         }
         val inputContact = android.widget.EditText(this).apply {
             hint = "Prénom du contact"
