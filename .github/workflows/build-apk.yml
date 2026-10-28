@@ -57,57 +57,21 @@ jobs:
           fi
           ls -la dist/
 
+      - name: Lire la version (automatique)
+        id: version
+        run: echo "version=$(grep -oP 'versionName = \"\\K[\"]+' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+
+      - name: Extraire les notes de la dernière version
+        run: |
+          awk '/^## /{n++} n>=2{exit} n==1' CHANGELOG.md > release_body.md
+          head -50 release_body.md
+
       - name: Publier les APK en Release (téléchargement direct)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.10
-          name: RandoGPX v1.10
-          body: |
-            🥾 RandoGPX v1.10
-
-            Navigation GPX pour la randonnée.
-
-            Nouveautés v1.10 :
-            • Menu escamotable : bouton « ▾ Masquer » pour libérer la carte
-            • Rose de boussole marine : aiguille rouge (nord) / bleue (sud),
-              graduations, points cardinaux
-            • Mini-boussole permanente en haut à droite de l'écran
-            • Trajet quasi vide (< 50 m) : demande avant sauvegarde
-            • v1.9 (rappel) :
-            • Mode nuit automatique au coucher du soleil (filtre sombre
-              sur la carte, interface ambrée — fonctionne hors-ligne)
-            • Refonte de la palette de couleurs
-            • v1.8 (rappel) :
-            • Export GPX automatique du parcours réel en fin de rando
-              (Documents/RandoGPX — visible dans « Mes GPX »)
-            • Trace du parcours dessinée en direct, visible aussi en
-              usage libre (sans GPX importé)
-            • Nouveau marqueur de position : pastille bleue à anneau
-              blanc, bien plus visible
-            • Déplacer la carte coupe le suivi automatiquement : le
-              bouton « Suivi » sert à se recentrer
-            • v1.7 (rappel) :
-            • Rappel de sécurité au Départ : « avez-vous prévenu un ami ? »
-            • Contact d'urgence : définition + SMS de procédure expliquant
-              quoi faire en cas de réception d'un SOS
-            • Bouton Urgence : SMS SOS avec coordonnées GPS et lien carte,
-              partage de position, appel 112, coordonnées en grand
-            • v1.6 (rappel) :
-            • Boussole d'orientation : cadran, cap en degrés, cardinal,
-              direction et distance du prochain waypoint
-            • Prévisions météo sur 7 jours (Open-Meteo)
-            • Éphémérides hors-ligne : lever/coucher du soleil, durée du
-              jour, lumière restante, phase de lune
-            • v1.5 (rappel) :
-            • Écran « À propos » avec les attributions obligatoires
-              (OpenStreetMap, OpenTopoMap, IGN, Open-Meteo, osmdroid)
-            • Infrastructure de build release signé (prêt pour Google Play) :
-              app-release.apk signé si le keystore est configuré
-            • APK debug toujours disponible pour tester
-
-            📲 Téléchargez un APK ci-dessous et installez-le
-            (autoriser les applications inconnues sur le téléphone).
-            Pour un usage courant, préférez app-release.apk (signé).
+          tag_name: v${{ steps.version.outputs.version }}
+          name: RandoGPX v${{ steps.version.outputs.version }}
+          body_path: release_body.md
           files: |
             dist/*
           make_latest: true
