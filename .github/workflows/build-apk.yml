@@ -60,14 +60,24 @@ jobs:
       - name: Publier les APK en Release (téléchargement direct)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.8
-          name: RandoGPX v1.8
+          tag_name: v1.10
+          name: RandoGPX v1.10
           body: |
-            🥾 RandoGPX v1.8
+            🥾 RandoGPX v1.10
 
             Navigation GPX pour la randonnée.
 
-            Nouveautés v1.8 :
+            Nouveautés v1.10 :
+            • Menu escamotable : bouton « ▾ Masquer » pour libérer la carte
+            • Rose de boussole marine : aiguille rouge (nord) / bleue (sud),
+              graduations, points cardinaux
+            • Mini-boussole permanente en haut à droite de l'écran
+            • Trajet quasi vide (< 50 m) : demande avant sauvegarde
+            • v1.9 (rappel) :
+            • Mode nuit automatique au coucher du soleil (filtre sombre
+              sur la carte, interface ambrée — fonctionne hors-ligne)
+            • Refonte de la palette de couleurs
+            • v1.8 (rappel) :
             • Export GPX automatique du parcours réel en fin de rando
               (Documents/RandoGPX — visible dans « Mes GPX »)
             • Trace du parcours dessinée en direct, visible aussi en
