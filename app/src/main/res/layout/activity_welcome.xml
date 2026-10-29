@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FF1F2933"
+    android:gravity="center"
+    android:padding="32dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Bienvenue 👋"
+        android:textColor="#FFECF0F3"
+        android:textSize="32sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Où allons-nous aujourd'hui ?"
+        android:textColor="#FFB7C2CC"
+        android:textSize="16sp" />
+
+    <Button
+        android:id="@+id/btnFollowGpx"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
+        android:background="@drawable/card_forest"
+        android:padding="28dp"
+        android:text="🗺️  Suivre un GPX"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnFreeHike"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:background="@drawable/card_orange"
+        android:padding="28dp"
+        android:text="🥾  Rando libre"
+        android:textAllCaps="false"
+        android:textColor="#FF26323C"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:gravity="center"
+        android:text="Vos fichiers restent dans Documents/RandoGPX — rien ne change pour vos anciennes randos."
+        android:textColor="#FF8A97A3"
+        android:textSize="13sp" />
+</LinearLayout>

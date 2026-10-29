@@ -4,6 +4,25 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v2.0.1
+
+La grande refonte V2 (livraison 2) :
+• Écran d'accueil à chaque lancement : « Bienvenue, où allons-nous
+  aujourd'hui ? » avec 2 grandes cartes — Suivre un GPX / Rando libre
+• Barre du bas allégée : 📂 GPX & cartes et 🧰 Outils en menus
+  déroulants ; ▶ Départ, ■ Terminer et 🆘 toujours accessibles
+• Bouton « ❓ » rond en haut à droite : aide en 3 sections
+  (Prise en main, FAQ, À propos)
+• Palette « ville/nature » : ardoise/blanc, accents vert forêt et
+  orange ; le panneau noir du haut devient un bandeau discret
+• Accès direct aux fichiers : journaux avec Ouvrir/Partager, partage
+  GPX depuis « Mes GPX », bouton « 📤 Partager le GPX » dans le
+  résumé de fin de rando
+• Sauvegarde cloud GitHub : dépôt privé + jeton fine-grained collé
+  dans l'app (🧰 Outils → ☁️), envoi immédiat en fin de rando et file
+  d'attente automatique sans réseau
+• Conserve le filtre GPS anti-glitch de la v1.14
+
 ## v1.14
 
 Fiabilité GPS en ville :

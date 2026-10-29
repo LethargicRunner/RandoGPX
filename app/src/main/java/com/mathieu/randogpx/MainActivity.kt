@@ -49,10 +49,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var tvStatus: TextView
     private lateinit var tvInfo: TextView
     private lateinit var arrow: ImageView
-    private lateinit var btnFollow: ToggleButton
     private lateinit var btnStartPause: Button
     private lateinit var btnFinish: Button
-    private lateinit var btnAbout: Button
     private var compassDial: CompassRose? = null
     private var compassText: TextView? = null
     private lateinit var miniCompass: CompassRose
@@ -125,7 +123,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val stateListener: (TrackService.State, String?) -> Unit = { st, summary ->
         runOnUiThread {
             syncControls()
-            summary?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+            // V2.0.1 : résumé de fin en dialogue (partage GPX + cloud)
+            if (st == TrackService.State.IDLE && summary != null) showFinishSummary(summary)
+            else summary?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -162,37 +162,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
                 if (followMode && System.currentTimeMillis() > recenteringUntil) {
                     followMode = false
-                    btnFollow.isChecked = false
                 }
                 return false
             }
             override fun onZoom(event: ZoomEvent?): Boolean = false
         })
 
-        findViewById<Button>(R.id.btnImport).setOnClickListener {
-            openGpx.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml", "*/*"))
-        }
-        findViewById<Button>(R.id.btnLibrary).setOnClickListener { showLibrary() }
-        findViewById<Button>(R.id.btnTiles).setOnClickListener { showTileSourceDialog() }
-        findViewById<Button>(R.id.btnOffline).setOnClickListener { downloadOfflineArea() }
-        findViewById<Button>(R.id.btnStats).setOnClickListener { showStats() }
-        findViewById<Button>(R.id.btnWaypoints).setOnClickListener { showWaypointDialog() }
+        // V2.0.1 : barre du bas allégée — 📂 fichiers, 🧰 outils, ▶/■, 🆘 toujours là
+        findViewById<Button>(R.id.btnFiles).setOnClickListener { showFilesMenu() }
+        findViewById<Button>(R.id.btnTools).setOnClickListener { showToolsMenu() }
+        findViewById<Button>(R.id.btnUrgency).setOnClickListener { showEmergencyDialog() }
+        findViewById<Button>(R.id.btnHelp).setOnClickListener { showHelpDialog() }
         btnStartPause.setOnClickListener { onStartPauseClicked() }
         btnFinish.setOnClickListener { onFinishClicked() }
-        btnAbout = findViewById(R.id.btnAbout)
-        btnAbout.setOnClickListener { showAbout() }
-        findViewById<Button>(R.id.btnCompass).setOnClickListener { showCompass() }
-        findViewById<Button>(R.id.btnWeather).setOnClickListener { showForecast() }
-        findViewById<Button>(R.id.btnEphemeris).setOnClickListener { showEphemeris() }
-        findViewById<Button>(R.id.btnUrgency).setOnClickListener { showEmergencyDialog() }
         btnFinishHere.setOnClickListener { confirmFinishHere() }
         btnNavCollapse.setOnClickListener {
             navCollapsed = !navCollapsed
             syncNavPanel()
-        }
-        btnFollow.setOnCheckedChangeListener { _, checked ->
-            followMode = checked
-            if (checked) recentreOnUser()
         }
 
         findViewById<Button>(R.id.btnMenuToggle).setOnClickListener {
@@ -210,6 +196,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         TrackService.stateListeners.add(stateListener)
         syncControls()
+
+        // V2.0.1 : arrivée depuis l'écran d'accueil
+        when (intent.getStringExtra("mode")) {
+            "gpx" -> openGpx.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml", "*/*"))
+            "libre" -> Toast.makeText(this, "Rando libre — « ▶ Départ » quand vous êtes prêt 🥾", Toast.LENGTH_LONG).show()
+        }
 
         // Mode nuit : application au démarrage puis contrôle toutes les minutes
         nightHandler = android.os.Handler(mainLooper)
@@ -458,13 +450,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val c = bottom.getChildAt(i)
             when (c.id) {
                 R.id.navPanel, R.id.btnMenuToggle, R.id.rowRun -> { }
-                R.id.rowTools -> {
-                    // seuls les boutons secondaires disparaissent, Urgence reste
-                    val row = c as android.view.ViewGroup
-                    for (j in 0 until row.childCount)
-                        row.getChildAt(j).visibility =
-                            if (menuCollapsed && j < row.childCount - 1) View.GONE else View.VISIBLE
-                }
                 else -> c.visibility = if (menuCollapsed) View.GONE else View.VISIBLE
             }
         }
@@ -866,10 +851,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     /** Teinte l'interface : tons ambrés la nuit, palette rando le jour. */
     private fun tintUi(night: Boolean) {
-        val panel = if (night) 0xF20E0B06.toInt() else 0xE61A2E24.toInt()
-        val bar = if (night) 0xF2120D07.toInt() else 0xCC14231C.toInt()
-        val navBg = if (night) 0xF233250F.toInt() else 0xE61E5A46.toInt()
-        val btnBg = if (night) 0xFF2A2014.toInt() else 0xFF2F4A3A.toInt()
+        // V2.0.1 : palette « ville/nature » — ardoise/blanc, vert forêt, orange
+        val panel = if (night) 0xF20E0B06.toInt() else 0xCC26323C.toInt()
+        val bar = if (night) 0xF2120D07.toInt() else 0xE61F2933.toInt()
+        val navBg = if (night) 0xF23B2F1B.toInt() else 0xE62E7D32.toInt()
+        val btnBg = if (night) 0xFF2A2014.toInt() else 0xFF2E5B46.toInt()
         val btnTxt = if (night) 0xFFFFC77D.toInt() else 0xFFF2EAD8.toInt()
         val txt = if (night) 0xFFE6C88A.toInt() else 0xFFE6E1D5.toInt()
         findViewById<View>(R.id.infoPanel).setBackgroundColor(panel)
@@ -959,6 +945,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .setItems(files.map { it.first }.toTypedArray()) { _, which ->
                 val (_, uri) = files[which]
                 loadGpx(uri, files[which].first)
+            }
+            .setNeutralButton("📤 Partager…") { _, _ ->
+                val names = files.map { it.first }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("Partager quel GPX ?")
+                    .setItems(names) { _, w -> shareGpxFile(names[w]) }
+                    .setNegativeButton("Fermer", null)
+                    .show()
             }
             .setNegativeButton("Fermer", null)
             .show()
@@ -1246,6 +1240,243 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.invalidate()
 
         updateNavigation()
+    }
+
+    // ---------- V2.0.1 : menus déroulants, aide, partage, cloud ----------
+
+    private fun showFilesMenu() {
+        val options = arrayOf(
+            "📥 Importer un GPX",
+            "📂 Mes GPX",
+            "🗺️ Fond de carte",
+            "⬇️ Cartes hors-ligne"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("📂 Fichiers & cartes")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> openGpx.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml", "*/*"))
+                    1 -> showLibrary()
+                    2 -> showTileSourceDialog()
+                    3 -> downloadOfflineArea()
+                }
+            }
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
+    private fun showToolsMenu() {
+        val followLabel = if (followMode) "🎯 Suivi carte : ON" else "🎯 Suivi carte : OFF"
+        val options = arrayOf(
+            "🧭 Boussole",
+            "☁️ Météo",
+            "🌙 Éphémérides",
+            "📊 Stats du tracé",
+            "📍 Waypoints",
+            followLabel,
+            "📁 Journaux & partages",
+            "☁️ Sauvegarde cloud",
+            "❓ Aide"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("🧰 Outils")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showCompass()
+                    1 -> showForecast()
+                    2 -> showEphemeris()
+                    3 -> showStats()
+                    4 -> showWaypointDialog()
+                    5 -> {
+                        followMode = !followMode
+                        if (followMode) recentreOnUser()
+                        Toast.makeText(this, if (followMode) "Suivi activé" else "Suivi coupé", Toast.LENGTH_SHORT).show()
+                    }
+                    6 -> showLogs()
+                    7 -> showCloudDialog()
+                    8 -> showHelpDialog()
+                }
+            }
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
+    /** Bouton « ❓ » : aide en 3 sections. */
+    private fun showHelpDialog() {
+        val options = arrayOf("🚀 Prise en main", "❓ FAQ", "ℹ️ À propos")
+        AlertDialog.Builder(this)
+            .setTitle("❓ Aide")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showManual()
+                    1 -> showFaq()
+                    2 -> showAbout()
+                }
+            }
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
+    private fun showFaq() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val scroll = android.widget.ScrollView(this)
+        val tv = TextView(this).apply {
+            text = Help.faq()
+            setPadding(pad, pad, pad, pad)
+            setTextIsSelectable(true)
+        }
+        scroll.addView(tv)
+        AlertDialog.Builder(this)
+            .setTitle("❓ FAQ")
+            .setView(scroll)
+            .setPositiveButton("Fermer", null)
+            .show()
+    }
+
+    /** Résumé de fin de rando : partage du GPX + sauvegarde cloud. */
+    private fun showFinishSummary(summary: String) {
+        val gpxName = if (summary.contains("Documents/RandoGPX/"))
+            summary.substringAfter("Documents/RandoGPX/").substringBefore('\n') else null
+        val builder = AlertDialog.Builder(this)
+            .setTitle("🎉 Rando enregistrée")
+            .setMessage(summary)
+            .setPositiveButton("OK", null)
+        if (gpxName != null) builder.setNeutralButton("📤 Partager le GPX") { _, _ -> shareGpxFile(gpxName) }
+        builder.show()
+        if (gpxName != null && CloudBackup.configured(this)) {
+            CloudBackup.enqueue(this, gpxName)
+            CloudBackup.flush(this) { ok, fail ->
+                runOnUiThread {
+                    if (fail == 0) Toast.makeText(this, "☁️ Sauvegarde cloud envoyée", Toast.LENGTH_SHORT).show()
+                    else Toast.makeText(this, "☁️ Cloud : " + ok + " envoyé(s), " + fail + " en attente de réseau", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    /** Partage un GPX de Documents/RandoGPX (mail, WhatsApp…). */
+    private fun shareGpxFile(name: String) {
+        val uri = GpxRepository.list(this).firstOrNull { it.first == name }?.second
+        if (uri == null) {
+            Toast.makeText(this, "Fichier introuvable : " + name, Toast.LENGTH_LONG).show()
+            return
+        }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/gpx+xml"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "Partager " + name))
+    }
+
+    /** Journaux JSON : Ouvrir ou Partager. */
+    private fun showLogs() {
+        val logs = listLogs()
+        if (logs.isEmpty()) {
+            Toast.makeText(this, "Aucun journal dans Documents/RandoGPX/logs", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("📁 Journaux (" + logs.size + ")")
+            .setItems(logs.map { it.first }.toTypedArray()) { _, which ->
+                val uri = logs[which].second
+                AlertDialog.Builder(this)
+                    .setTitle(logs[which].first)
+                    .setPositiveButton("📤 Partager") { _, _ ->
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/json"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(intent, "Partager le journal"))
+                    }
+                    .setNeutralButton("👁 Ouvrir") { _, _ ->
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "application/json")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            })
+                        } catch (_: Exception) {
+                            Toast.makeText(this, "Aucune app pour ouvrir ce fichier", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton("Fermer", null)
+                    .show()
+            }
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
+    private fun listLogs(): List<Pair<String, android.net.Uri>> {
+        val result = mutableListOf<Pair<String, android.net.Uri>>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val collection = android.provider.MediaStore.Files.getContentUri(android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            contentResolver.query(
+                collection,
+                arrayOf(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, android.provider.MediaStore.MediaColumns._ID),
+                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ? AND " +
+                    android.provider.MediaStore.MediaColumns.RELATIVE_PATH + " LIKE ?",
+                arrayOf("%.json", "%RandoGPX/logs%"),
+                android.provider.MediaStore.MediaColumns.DISPLAY_NAME + " DESC"
+            )?.use { c ->
+                val nameIdx = c.getColumnIndex(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+                val idIdx = c.getColumnIndex(android.provider.MediaStore.MediaColumns._ID)
+                while (c.moveToNext()) {
+                    result += c.getString(nameIdx) to
+                        android.net.Uri.withAppendedPath(collection, c.getLong(idIdx).toString())
+                }
+            }
+        } else {
+            val dir = java.io.File(
+                android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS),
+                "RandoGPX/logs"
+            )
+            dir?.listFiles()?.filter { it.extension == "json" }?.sortedByDescending { it.name }?.forEach {
+                result += it.name to android.net.Uri.fromFile(it)
+            }
+        }
+        return result
+    }
+
+    /** ☁️ Réglages de la sauvegarde cloud GitHub (dépôt privé + jeton). */
+    private fun showCloudDialog() {
+        val saved = CloudBackup.loadSettings(this)
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+        }
+        val inputOwner = android.widget.EditText(this).apply { hint = "Propriétaire GitHub (ex. LethargicRunner)"; saved?.let { setText(it.first) } }
+        val inputRepo = android.widget.EditText(this).apply { hint = "Dépôt privé (ex. RandoGPX-data)"; saved?.let { setText(it.second) } }
+        val inputToken = android.widget.EditText(this).apply { hint = "Jeton fine-grained (Contents : lecture/écriture)"; saved?.let { setText(it.third) } }
+        container.addView(inputOwner)
+        container.addView(inputRepo)
+        container.addView(inputToken)
+        AlertDialog.Builder(this)
+            .setTitle("☁️ Sauvegarde cloud GitHub")
+            .setMessage(
+                "Vos randos sont envoyées dans un dépôt GitHub PRIVÉ que vous créez.\n\n" +
+                    "1) Créez le dépôt sur github.com\n" +
+                    "2) Générez un jeton fine-grained (Settings → Developer settings), accès limité à CE dépôt, permission Contents : Read and write\n" +
+                    "3) Collez-le ici — il reste stocké uniquement dans votre téléphone"
+            )
+            .setView(container)
+            .setPositiveButton("Enregistrer") { _, _ ->
+                CloudBackup.saveSettings(this, inputOwner.text.toString().trim(), inputRepo.text.toString().trim(), inputToken.text.toString().trim())
+                Toast.makeText(this, "☁️ Sauvegarde cloud configurée", Toast.LENGTH_SHORT).show()
+                CloudBackup.flush(this) { ok, fail ->
+                    runOnUiThread { Toast.makeText(this, "☁️ " + ok + " envoyé(s), " + fail + " en attente", Toast.LENGTH_LONG).show() }
+                }
+            }
+            .setNeutralButton("Envoyer maintenant") { _, _ ->
+                if (!CloudBackup.configured(this)) {
+                    Toast.makeText(this, "Renseignez d'abord le dépôt et le jeton", Toast.LENGTH_LONG).show()
+                } else CloudBackup.flush(this) { ok, fail ->
+                    runOnUiThread { Toast.makeText(this, "☁️ " + ok + " envoyé(s), " + fail + " en attente", Toast.LENGTH_LONG).show() }
+                }
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
     }
 
     private fun recentreOnUser() {
