@@ -1199,6 +1199,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun onNewLocation(loc: android.location.Location) {
+        // V1.14 : fix douteux (glitch urbain) -> ignoré partout
+        // (pastille, trace orange, distance au tracé, navigation)
+        if (!GpsFilter.accept(loc)) return
         currentLat = loc.latitude
         currentLon = loc.longitude
         currentAlt = if (loc.hasAltitude()) loc.altitude else currentAlt

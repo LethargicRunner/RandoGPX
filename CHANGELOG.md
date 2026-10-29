@@ -4,6 +4,19 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v1.14
+
+Fiabilité GPS en ville :
+• Nouveau filtre anti-glitch appliqué à TOUTE l'app : un fix GPS
+  douteux (précision annoncée > 30 m, ou déplacement impossible à
+  pied : plus de ~16 km/h sur plus de 20 m) est ignoré
+• Fini les sauts de plusieurs kilomètres : pastille de position,
+  trace orange en direct et distance au tracé restent sur la
+  dernière position fiable
+• L'enregistrement GPX bénéficie du même filtre (double protection)
+• Rappel : l'altitude GPS reste indicative en ville (effet canyon
+  urbain), ne vous y fiez pas sur pied
+
 ## v1.13
 
 Sécurité & fiabilité (livraison 1 de la refonte V2) :

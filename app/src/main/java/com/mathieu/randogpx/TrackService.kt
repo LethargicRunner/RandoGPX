@@ -142,11 +142,14 @@ class TrackService : Service() {
     private fun startLocationUpdates() {
         val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
         val l = android.location.LocationListener { loc ->
-            logger?.add(
-                loc.latitude, loc.longitude,
-                if (loc.hasAltitude()) loc.altitude else null
-            )
-            adaptGpsInterval(loc.latitude, loc.longitude)
+            // V1.14 : même filtre anti-glitch pour l'enregistrement
+            if (GpsFilter.accept(loc)) {
+                logger?.add(
+                    loc.latitude, loc.longitude,
+                    if (loc.hasAltitude()) loc.altitude else null
+                )
+                adaptGpsInterval(loc.latitude, loc.longitude)
+            }
         }
         locationListener = l
         try {
