@@ -142,7 +142,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvInfo = findViewById(R.id.tvInfo)
         arrow = findViewById(R.id.compassArrow)
         miniCompass = findViewById(R.id.miniCompass)
-        btnFollow = findViewById(R.id.btnFollow)
         btnStartPause = findViewById(R.id.btnStartPause)
         btnFinish = findViewById(R.id.btnFinish)
 
