@@ -88,6 +88,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var lastAlertTime = 0L
     private var followMode = true
 
+    /** V1.13 : un contact d'urgence est-il prévenu pour cette rando ? */
+    private var departureSmsSent = false
+
     // Navigation turn-by-turn
     private var plannedPairs: List<Pair<Double, Double>> = emptyList()
     private val walkedPoints = mutableListOf<Pair<Double, Double>>()
@@ -306,8 +309,87 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         AlertDialog.Builder(this)
             .setTitle("Terminer la rando ?")
             .setMessage("Le journal (parcours réel + stats + météo) sera sauvegardé dans Documents/RandoGPX/logs/")
-            .setPositiveButton("Enregistrer") { _, _ -> startService(stopIntent) }
+            .setPositiveButton("Enregistrer") { _, _ -> showHikeMetaDialog(stopIntent) }
             .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    /**
+     * V1.13 : nom, difficulté (étoiles) et note libre — écrits directement
+     * dans le GPX exporté (<name>, <keywords>, <desc>) et le journal JSON.
+     */
+    private fun showHikeMetaDialog(stopIntent: Intent) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, 0, pad, 0)
+        }
+        val inputName = android.widget.EditText(this).apply {
+            setText(trackName.substringBeforeLast('.'))
+            hint = "ex. Tour du lac"
+        }
+        val labelDiff = TextView(this).apply {
+            text = "Difficulté (étoiles) :"
+            setPadding(0, pad, 0, 0)
+        }
+        val rating = android.widget.RatingBar(this).apply {
+            numStars = 5
+            stepSize = 1f
+            rating = 0f
+        }
+        val labelNote = TextView(this).apply {
+            text = "Note libre (optionnel) :"
+            setPadding(0, pad, 0, 0)
+        }
+        val inputNote = android.widget.EditText(this).apply {
+            hint = "Ambiance, chemin, à refaire…"
+        }
+        container.addView(inputName)
+        container.addView(labelDiff)
+        container.addView(rating)
+        container.addView(labelNote)
+        container.addView(inputNote)
+        AlertDialog.Builder(this)
+            .setTitle("🏷️ Ma rando en bref")
+            .setView(container)
+            .setPositiveButton("Enregistrer") { _, _ ->
+                TrackService.pendingMeta = Triple(
+                    inputName.text.toString().trim(),
+                    rating.rating.toInt(),
+                    inputNote.text.toString().trim()
+                )
+                startService(stopIntent)
+                maybeOfferReturnSms()
+            }
+            .setNegativeButton("Sans détails") { _, _ ->
+                startService(stopIntent)
+                maybeOfferReturnSms()
+            }
+            .show()
+    }
+
+    /**
+     * V1.13 : clôture de la boucle de sécurité — propose d'envoyer un message
+     * de retour au contact d'urgence prévenu au départ.
+     */
+    private fun maybeOfferReturnSms() {
+        if (!departureSmsSent) return
+        departureSmsSent = false
+        val contact = Emergency.load(this) ?: return
+        AlertDialog.Builder(this)
+            .setTitle("🎉 Retour de randonnée")
+            .setMessage(
+                "Vous aviez prévenu " + contact.first + " avant de partir.\n\n" +
+                    "Envoyer un message de retour pour le/la rassurer ?"
+            )
+            .setPositiveButton("Envoyer") { _, _ ->
+                sendSms(
+                    contact.second,
+                    "Bonjour " + contact.first + ", je suis revenu(e) de ma randonnée, " +
+                        "tout va bien ! 😊 Tu peux dormir sur tes deux oreilles."
+                )
+            }
+            .setNegativeButton("Plus tard", null)
             .show()
     }
 
@@ -328,6 +410,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     intent.action = TrackService.ACTION_STOP
                     startService(intent)
                 }
+                maybeOfferReturnSms()
                 startReturnGuidance()
             }
             .setNegativeButton("Annuler", null)
@@ -405,7 +488,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             TrackService.State.RECORDING ->
                 tvInfo.text = "🔴 Enregistrement en cours (" + TrackService.trackName + ")"
             TrackService.State.PAUSED -> tvInfo.text = "⏸ Rando en pause"
-            TrackService.State.IDLE -> { }
+            TrackService.State.IDLE -> tvInfo.text = "🟢 Prêt — aucune rando en cours"
         }
     }
 
@@ -450,6 +533,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val intent = Intent(this, TrackService::class.java)
         TrackService.trackName = if (track.isNotEmpty()) trackName else "rando_libre"
         TrackService.weather = weather
+        // V1.13 : SMS de retour proposé en fin de rando si un contact est prévenu
+        departureSmsSent = Emergency.load(this) != null
         intent.action = TrackService.ACTION_START
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             startForegroundService(intent) else startService(intent)
@@ -632,7 +717,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun updateCompassViews() {
         val heading = ((azimuth % 360f) + 360f) % 360f
+        val latC = currentLat
+        val lonC = currentLon
+        val wpC = nextWp
+        val targetB = if (wpC != null && latC != null && lonC != null)
+            GpxUtils.bearing(latC, lonC, wpC.lat, wpC.lon).toFloat()
+        else null
         compassDial?.rotationDeg = -heading
+        compassDial?.targetBearingDeg = targetB
         compassDial?.invalidate()
         miniCompass.rotationDeg = -heading
         miniCompass.invalidate()
@@ -643,7 +735,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val wpLine = if (wp != null && lat != null && lon != null) {
             val b = GpxUtils.bearing(lat, lon, wp.lat, wp.lon)
             val d = GpxUtils.distance(lat, lon, wp.lat, wp.lon)
-            "\nVers " + wp.name + " : " + "%.0f°".format(java.util.Locale.US, b) + " — " + d.toKm()
+            "\nVers " + wp.name + " : " + "%.0f°".format(java.util.Locale.US, b) + " — " + d.toKm() +
+                "\n📍 Alignez le pin orange sous la flèche rouge"
         } else ""
         compassText?.text =
             "%.0f° (%s)".format(java.util.Locale.US, heading.toDouble(), card) + wpLine

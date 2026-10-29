@@ -49,7 +49,7 @@ class HikeLogger(
         return end - startTime - pausedMs
     }
 
-    private fun buildJson(): JSONObject {
+    private fun buildJson(meta: Triple<String, Int, String>? = null): JSONObject {
         var dist = 0.0
         for (i in 1 until points.size) {
             dist += GpxUtils.distance(
@@ -63,6 +63,11 @@ class HikeLogger(
         return JSONObject().apply {
             put("rando", trackName)
             put("debut", iso(startTime))
+            meta?.let {
+                if (it.first.isNotBlank()) put("rando", it.first)
+                if (it.second > 0) put("difficulte_etoiles", it.second)
+                if (it.third.isNotBlank()) put("note", it.third)
+            }
             put("duree_min", elapsedMs() / 60000)
             put("distance_km", Math.round(dist / 10.0) / 100.0)
             put("denivele_positif_m", asc)
@@ -88,16 +93,21 @@ class HikeLogger(
     }
 
     /** Export GPX standard du parcours réel (gpx.studio, Visorando…). */
-    private fun buildGpx(): String {
+    private fun buildGpx(hikeName: String, stars: Int, note: String): String {
         val sb = StringBuilder()
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         sb.append("<gpx version=\"1.1\" creator=\"RandoGPX\" ")
             .append("xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
         sb.append("  <metadata>\n    <name>")
-            .append(xmlEscape(trackName)).append("</name>\n    <time>")
+            .append(xmlEscape(hikeName)).append("</name>\n")
+        if (note.isNotBlank())
+            sb.append("    <desc>").append(xmlEscape(note)).append("</desc>\n")
+        if (stars > 0)
+            sb.append("    <keywords>difficulte=").append(stars).append("</keywords>\n")
+        sb.append("    <time>")
             .append(iso(startTime)).append("</time>\n  </metadata>\n")
         sb.append("  <trk>\n    <name>")
-            .append(xmlEscape(trackName)).append("</name>\n    <trkseg>\n")
+            .append(xmlEscape(hikeName)).append("</name>\n    <trkseg>\n")
         points.forEach { p ->
             sb.append("      <trkpt lat=\"").append(p.lat).append("\" lon=\"")
                 .append(p.lon).append("\">")
@@ -125,26 +135,33 @@ class HikeLogger(
     }
 
     /** Termine la rando : journal final dans Documents/RandoGPX/logs/, autosave supprimé. */
-    fun finish(context: Context): String {
-        val json = buildJson()
+    fun finish(context: Context, meta: Triple<String, Int, String>? = null): String {
+        val hikeName = meta?.first?.takeIf { it.isNotBlank() }
+            ?: trackName.substringBeforeLast('.')
+        val stars = meta?.second ?: 0
+        val note = meta?.third ?: ""
+
+        val json = buildJson(meta)
         val endTime = System.currentTimeMillis()
 
         val fileName = "log_" +
                 SimpleDateFormat("yyyyMMdd_HHmm", Locale.FRANCE)
                     .format(Date(startTime)) + "_" +
-                trackName.substringBeforeLast('.').replace(' ', '_') + ".json"
+                hikeName.replace(' ', '_') + ".json"
 
         writePublic(context, fileName, json.toString(2).toByteArray())
         File(context.filesDir, AUTOSAVE).delete()
 
         // Export GPX du parcours réel : rangé dans Documents/RandoGPX,
         // visible dans « Mes GPX », partageable et réimportable
+        var gpxFile = ""
         if (points.size >= 2) {
             try {
                 val gpxName = "rando_" +
                     SimpleDateFormat("yyyyMMdd_HHmm", Locale.FRANCE).format(Date(startTime)) +
-                    "_" + trackName.substringBeforeLast('.').replace(' ', '_')
-                GpxRepository.save(context, gpxName, buildGpx().toByteArray())
+                    "_" + hikeName.replace(' ', '_')
+                val saved = GpxRepository.save(context, gpxName, buildGpx(hikeName, stars, note).toByteArray())
+                gpxFile = "Documents/RandoGPX/" + saved
             } catch (_: Exception) { }
         }
 
@@ -159,7 +176,7 @@ class HikeLogger(
             elapsedMs() / 60000,
             TrackStats.compute(points.map { TrackPoint(it.lat, it.lon, it.ele, it.time) }).ascentM,
             weatherAtStart?.let { " | " + it.description + ", " + it.temperatureC + "°C" } ?: ""
-        )
+        ) + (if (gpxFile.isNotEmpty()) "\n📁 GPX : " + gpxFile else "")
     }
 
     companion object {

@@ -4,6 +4,19 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v1.13
+
+Sécurité & fiabilité (livraison 1 de la refonte V2) :
+• Correctif : l'affichage restait bloqué sur « Enregistrement en cours »
+  après avoir terminé une rando
+• SMS de retour : après « Terminer », l'app propose de prévenir votre
+  contact d'urgence que vous êtes revenu de rando
+• Nom, difficulté (étoiles) et note libre saisis en fin de rando, écrits
+  directement dans le GPX (<name>, <keywords>, <desc>) et le journal
+• Le fichier GPX créé est annoncé avec son emplacement exact
+• Boussole de visée : aiguille fixe, couronne tournante, pin orange vers
+  l'objectif — alignez-le sous la flèche rouge pour vous diriger
+
 ## v1.12
 
 Nouveautés v1.12 :

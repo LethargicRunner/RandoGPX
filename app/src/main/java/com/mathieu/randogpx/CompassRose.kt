@@ -7,9 +7,13 @@ import android.graphics.Paint
 import android.view.View
 
 /**
- * Rose de boussole « marine » : aiguille rouge (nord) / bleue (sud),
- * graduations tous les 15°, points cardinaux — dessinée à la main (hors-ligne).
- * rotationDeg oriente la rose : 0 = nord vers le haut de l'écran.
+ * Boussole de visée (V1.13) :
+ * - l'aiguille rouge/bleue est FIXE : la pointe rouge marque la direction
+ *   de marche (haut de l'écran)
+ * - la couronne graduée (N E S O, graduations 15°) tourne sous l'aiguille
+ * - le cap se lit sous l'index orange fixe, en haut
+ * - si un objectif est défini (targetBearingDeg), un pin orange apparaît sur
+ *   la couronne : alignez-le sous l'aiguille rouge pour vous diriger vers lui.
  */
 class CompassRose : View {
     constructor(context: Context) : super(context)
@@ -40,9 +44,15 @@ class CompassRose : View {
     private val lubber = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(255, 176, 0); style = Paint.Style.FILL
     }
+    private val pin = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(255, 152, 0); style = Paint.Style.FILL
+    }
 
-    /** Orientation de la rose en degrés (−heading pour suivre le cap). */
+    /** Orientation de la couronne en degrés (−heading pour suivre le cap). */
     var rotationDeg = 0f
+
+    /** Relèvement (°) de l'objectif à afficher sur la couronne, ou null. */
+    var targetBearingDeg: Float? = null
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -50,13 +60,12 @@ class CompassRose : View {
         val cx = w / 2f
         val cy = h / 2f
         val r = Math.min(w, h) / 2f - 4f
-        canvas.drawCircle(cx, cy, r, circle)
-        canvas.drawCircle(cx, cy, r, ring)
 
+        // ---- couronne tournante : fond, graduations, cardinales, pin objectif ----
         canvas.save()
         canvas.rotate(rotationDeg, cx, cy)
-
-        // graduations toutes les 15°, longues sur les cardinales
+        canvas.drawCircle(cx, cy, r, circle)
+        canvas.drawCircle(cx, cy, r, ring)
         for (a in 0 until 360 step 15) {
             val rad = Math.toRadians(a.toDouble())
             val long = a % 90 == 0
@@ -69,8 +78,25 @@ class CompassRose : View {
                 if (long) ring else tick
             )
         }
+        text.textSize = r * 0.17f
+        val labels = listOf("N" to 0f, "E" to 90f, "S" to 180f, "O" to 270f)
+        for ((lbl, ang) in labels) {
+            val rad = Math.toRadians(ang.toDouble())
+            val tx = cx + (r * 0.66f * Math.sin(rad)).toFloat()
+            val ty = cy - (r * 0.66f * Math.cos(rad)).toFloat() + text.textSize / 3f
+            text.color = if (lbl == "N") Color.rgb(255, 120, 120) else Color.rgb(242, 234, 216)
+            canvas.drawText(lbl, tx, ty, text)
+        }
+        targetBearingDeg?.let { tb ->
+            val rad = Math.toRadians(tb.toDouble())
+            val px = cx + (r * 0.83f * Math.sin(rad)).toFloat()
+            val py = cy - (r * 0.83f * Math.cos(rad)).toFloat()
+            canvas.drawCircle(px, py, r * 0.055f, pin)
+            canvas.drawCircle(px, py, r * 0.025f, hub)
+        }
+        canvas.restore()
 
-        // aiguille : pointe rouge vers le nord, bleue vers le sud
+        // ---- aiguille FIXE : rouge vers le haut = direction de marche ----
         val nR = r * 0.64f
         val nW = r * 0.10f
         val pathN = android.graphics.Path().apply {
@@ -83,19 +109,7 @@ class CompassRose : View {
         canvas.drawPath(pathS, blue)
         canvas.drawCircle(cx, cy, r * 0.05f, hub)
 
-        // points cardinaux, tournés avec la rose
-        text.textSize = r * 0.17f
-        val labels = listOf("N" to 0f, "E" to 90f, "S" to 180f, "O" to 270f)
-        for ((lbl, ang) in labels) {
-            val rad = Math.toRadians(ang.toDouble())
-            val tx = cx + (r * 0.66f * Math.sin(rad)).toFloat()
-            val ty = cy - (r * 0.66f * Math.cos(rad)).toFloat() + text.textSize / 3f
-            text.color = if (lbl == "N") Color.rgb(255, 120, 120) else Color.rgb(242, 234, 216)
-            canvas.drawText(lbl, tx, ty, text)
-        }
-        canvas.restore()
-
-        // repère fixe orange en haut : direction de marche
+        // index fixe orange en haut : le cap se lit ici
         val s = r * 0.09f
         val p = android.graphics.Path().apply {
             moveTo(cx, cy - r + s); lineTo(cx - s, cy - r - s); lineTo(cx + s, cy - r - s); close()

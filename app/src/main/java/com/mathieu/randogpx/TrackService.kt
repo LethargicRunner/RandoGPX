@@ -34,6 +34,9 @@ class TrackService : Service() {
         /** V1.10 : vrai = la prochaine finalisation est jetée (trajet quasi vide). */
         var discardNextSave = false
 
+        /** V1.13 : nom, difficulté (étoiles) et note libre saisis en fin de rando. */
+        var pendingMeta: Triple<String, Int, String>? = null
+
         /** Tracé GPX prévu (pour détecter virages et bifurcations à venir). */
         var plannedTrack: List<TrackPoint> = emptyList()
 
@@ -112,12 +115,14 @@ class TrackService : Service() {
     private fun stopRecording() {
         val discard = discardNextSave
         discardNextSave = false
+        val meta = pendingMeta
+        pendingMeta = null
         lastSummary = try {
             if (discard) {
                 logger?.discard(this)
                 "Sortie abandonnée : rien n'a été sauvegardé"
             } else {
-                logger?.finish(this)
+                logger?.finish(this, meta)
             }
         } catch (e: Exception) {
             "Erreur lors de l'enregistrement : " + e.message
