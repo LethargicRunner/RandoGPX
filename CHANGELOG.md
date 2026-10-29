@@ -4,6 +4,17 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v2.1
+
+Menus encore plus simples :
+• 🌤️ « Ciel du jour » fusionne la météo et les éphémérides en un seul
+  écran — la prévision du jour s'affiche AU-DESSUS du lever/coucher du
+  soleil, de la lumière restante et de la phase de lune
+• Bouton « 📅 Prévisions à 5 jours » (au lieu de 7) depuis ce même écran
+• Le menu 🧰 Outils gagne en lisibilité : une ligne de moins
+• Fonctionne aussi en rando libre (position GPS) et sans réseau :
+  les éphémérides restent affichées, seule la météo est absente
+
 ## v2.0.1
 
 La grande refonte V2 (livraison 2) :

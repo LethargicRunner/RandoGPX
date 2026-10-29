@@ -727,18 +727,63 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             "%.0f° (%s)".format(java.util.Locale.US, heading.toDouble(), card) + wpLine
     }
 
-    private fun showForecast() {
+    /**
+     * V2.1 : « Ciel du jour » — un seul écran qui regroupe la prévision
+     * météo du jour (au-dessus) et les éphémérides, avec un bouton
+     * pour les prévisions à 5 jours.
+     */
+    private fun showSkyDialog() {
         val lat = currentLat ?: track.firstOrNull()?.lat
         val lon = currentLon ?: track.firstOrNull()?.lon
         if (lat == null || lon == null) {
             Toast.makeText(this, "Position indisponible — dehors ou avec un GPX", Toast.LENGTH_SHORT).show()
             return
         }
+        // Éphémérides : calcul local, toujours disponibles
+        val now = System.currentTimeMillis()
+        val (sunrise, sunset) = Ephemeris.sunTimes(lat, lon, now)
+        val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val sb = StringBuilder()
+        sb.append("🌅 Lever du soleil : ")
+            .append(if (sunrise != null) fmt.format(java.util.Date(sunrise)) else "—").append("\n")
+        sb.append("🌇 Coucher du soleil : ")
+            .append(if (sunset != null) fmt.format(java.util.Date(sunset)) else "—").append("\n")
+        if (sunrise != null && sunset != null) {
+            sb.append("⏱️ Durée du jour : ").append(formatDuration(sunset - sunrise)).append("\n")
+            if (now >= sunrise && now <= sunset) {
+                sb.append("\n✅ Il reste ").append(formatDuration(sunset - now)).append(" de lumière").append("\n")
+            }
+        }
+        val phase = Ephemeris.moonPhase(now)
+        sb.append("\n🌙 ").append(Ephemeris.moonName(phase))
+            .append(" (").append(Ephemeris.moonIllumination(phase)).append("% éclairée)")
+        // Météo du jour : réseau ponctuel — s'affiche au-dessus si dispo
+        Toast.makeText(this, "Chargement de la météo…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val current = Weather.fetch(lat, lon)
+            runOnUiThread {
+                val msg = if (current != null)
+                    "☀️ Aujourd'hui : " + current.temperatureC.toInt() + "°C, " +
+                        current.description + ", vent " + current.windKmh.toInt() + " km/h\n\n" + sb
+                else
+                    "☁️ Météo indisponible (pas de réseau)\n\n" + sb
+                AlertDialog.Builder(this)
+                    .setTitle("🌤️ Ciel du jour")
+                    .setMessage(msg)
+                    .setPositiveButton("📅 Prévisions à 5 jours") { _, _ -> showForecast5(lat, lon) }
+                    .setNegativeButton("Fermer", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    /** V2.1 : prévisions condensées à 5 jours. */
+    private fun showForecast5(lat: Double, lon: Double) {
         Toast.makeText(this, "Chargement des prévisions…", Toast.LENGTH_SHORT).show()
         Thread {
-            val days = Weather.fetchForecast(lat, lon)
+            val days = Weather.fetchForecast(lat, lon)?.take(5)
             runOnUiThread {
-                if (days == null) {
+                if (days == null || days.isEmpty()) {
                     Toast.makeText(this, "Météo indisponible (pas de réseau)", Toast.LENGTH_LONG).show()
                     return@runOnUiThread
                 }
@@ -753,7 +798,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         .append(", pluie ").append(d.precipProb).append("%\n")
                 }
                 AlertDialog.Builder(this)
-                    .setTitle("☁️ Prévisions météo (7 jours)")
+                    .setTitle("📅 Prévisions (5 jours)")
                     .setMessage(sb.toString().trim() + "\n\nSource : Open-Meteo")
                     .setPositiveButton("OK", null)
                     .show()
@@ -766,37 +811,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val out = java.text.SimpleDateFormat("EEE d", java.util.Locale.FRENCH)
         out.format(parsed)
     } catch (_: Exception) { iso }
-
-    private fun showEphemeris() {
-        val lat = currentLat ?: track.firstOrNull()?.lat
-        val lon = currentLon ?: track.firstOrNull()?.lon
-        if (lat == null || lon == null) {
-            Toast.makeText(this, "Position indisponible — dehors ou avec un GPX", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val now = System.currentTimeMillis()
-        val (sunrise, sunset) = Ephemeris.sunTimes(lat, lon, now)
-        val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-        val sb = StringBuilder()
-        sb.append("🌅 Lever du soleil : ")
-            .append(if (sunrise != null) fmt.format(java.util.Date(sunrise)) else "—").append("\n")
-        sb.append("🌇 Coucher du soleil : ")
-            .append(if (sunset != null) fmt.format(java.util.Date(sunset)) else "—").append("\n")
-        if (sunrise != null && sunset != null) {
-            sb.append("⏱️ Durée du jour : ").append(formatDuration(sunset - sunrise)).append("\n")
-            if (now >= sunrise && now <= sunset) {
-                sb.append("\n✅ Il reste ").append(formatDuration(sunset - now)).append(" de lumière")
-            }
-        }
-        val phase = Ephemeris.moonPhase(now)
-        sb.append("\n🌙 ").append(Ephemeris.moonName(phase))
-            .append(" (").append(Ephemeris.moonIllumination(phase)).append("% éclairée)")
-        AlertDialog.Builder(this)
-            .setTitle("🌙 Éphémérides du jour")
-            .setMessage(sb.toString())
-            .setPositiveButton("OK", null)
-            .show()
-    }
 
     private fun formatDuration(ms: Long): String {
         val totalMin = ms / 60000
@@ -1269,8 +1283,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val followLabel = if (followMode) "🎯 Suivi carte : ON" else "🎯 Suivi carte : OFF"
         val options = arrayOf(
             "🧭 Boussole",
-            "☁️ Météo",
-            "🌙 Éphémérides",
+            "🌤️ Ciel du jour",
             "📊 Stats du tracé",
             "📍 Waypoints",
             followLabel,
@@ -1283,18 +1296,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> showCompass()
-                    1 -> showForecast()
-                    2 -> showEphemeris()
-                    3 -> showStats()
-                    4 -> showWaypointDialog()
-                    5 -> {
+                    1 -> showSkyDialog()
+                    2 -> showStats()
+                    3 -> showWaypointDialog()
+                    4 -> {
                         followMode = !followMode
                         if (followMode) recentreOnUser()
                         Toast.makeText(this, if (followMode) "Suivi activé" else "Suivi coupé", Toast.LENGTH_SHORT).show()
                     }
-                    6 -> showLogs()
-                    7 -> showCloudDialog()
-                    8 -> showHelpDialog()
+                    5 -> showLogs()
+                    6 -> showCloudDialog()
+                    7 -> showHelpDialog()
                 }
             }
             .setNegativeButton("Fermer", null)

@@ -28,7 +28,7 @@ object Help {
 • Sur la carte : pastille bleue = votre position ; tracé bleu = itinéraire prévu ; tracé orange = votre parcours réel ; points = waypoints du GPX.
 • En bas : « ▾ Masquer » replie les menus pour libérer la carte — ▶ Départ/Pause, ■ Terminer et 🆘 restent toujours visibles.
 • 📂 GPX & cartes : importer, Mes GPX, fond de carte, hors-ligne.
-• 🧰 Outils : boussole, météo, éphémérides, stats, waypoints, suivi carte, journaux, sauvegarde cloud, aide.
+• 🧰 Outils : boussole, ciel du jour (météo + éphémérides), stats, waypoints, suivi carte, journaux, sauvegarde cloud, aide.
 
 ═══════════════════════════════
 3. ENREGISTRER UNE RANDO
@@ -67,8 +67,7 @@ object Help {
 7. BOUSSOLE, MÉTÉO, ÉPHÉMÉRIDES
 ═══════════════════════════════
 • 🧭 Boussole : rose marine (rouge = nord, bleu = sud), cap en degrés, direction du prochain waypoint.
-• ☁️ Météo : prévisions sur 7 jours (Open-Meteo) — nécessite un accès réseau ponctuel.
-• 🌙 Éphémérides : lever/coucher du soleil, lumière restante, phase de lune — 100 % hors-ligne.
+• 🌤️ Ciel du jour : un seul écran — météo du jour en haut (Open-Meteo, réseau ponctuel), éphémérides en dessous (lever/coucher, lumière restante, lune — 100 % hors-ligne), et un bouton « 📅 Prévisions à 5 jours ».
 
 ═══════════════════════════════
 8. SÉCURITÉ 🆘
