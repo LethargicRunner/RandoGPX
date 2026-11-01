@@ -53,6 +53,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var btnFinish: Button
     private var compassDial: CompassRose? = null
     private var compassText: TextView? = null
+    private lateinit var directionArrow: ImageView
+    private var dirBearing: Double? = null
     private lateinit var miniCompass: CompassRose
     private val CARDINALS = arrayOf("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 
@@ -142,6 +144,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         tvInfo = findViewById(R.id.tvInfo)
         arrow = findViewById(R.id.compassArrow)
         miniCompass = findViewById(R.id.miniCompass)
+        directionArrow = findViewById(R.id.directionArrow)
+        miniCompass.setOnClickListener { showCompass() }
         btnStartPause = findViewById(R.id.btnStartPause)
         btnFinish = findViewById(R.id.btnFinish)
 
@@ -948,19 +952,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun showLibrary() {
-        val files = GpxRepository.list(this)
+        val files = GpxRepository.listDetailed(this)
         if (files.isEmpty()) {
             Toast.makeText(this, "Aucun GPX dans Documents/RandoGPX", Toast.LENGTH_LONG).show()
             return
         }
+        // V2.2 : affichage plus clair — nom + taille + date
+        val fmtDate = java.text.SimpleDateFormat("d MMM yyyy • HH:mm", java.util.Locale.FRENCH)
+        val lines = files.map {
+            it.name + "\n" +
+                (if (it.sizeBytes >= 1048576) "%.1f Mo".format(it.sizeBytes / 1048576.0)
+                else (it.sizeBytes / 1024).toString() + " Ko") +
+                " • " + fmtDate.format(java.util.Date(it.dateMs))
+        }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("📁 Mes GPX (" + files.size + ")")
-            .setItems(files.map { it.first }.toTypedArray()) { _, which ->
-                val (_, uri) = files[which]
-                loadGpx(uri, files[which].first)
+            .setItems(lines) { _, which ->
+                loadGpx(files[which].uri, files[which].name)
             }
             .setNeutralButton("📤 Partager…") { _, _ ->
-                val names = files.map { it.first }.toTypedArray()
+                val names = files.map { it.name }.toTypedArray()
                 AlertDialog.Builder(this)
                     .setTitle("Partager quel GPX ?")
                     .setItems(names) { _, w -> shareGpxFile(names[w]) }
@@ -1130,7 +1141,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             trackStats = if (track.size > 1) TrackStats.compute(track) else null
 
             trackLine?.let { map.overlays.remove(it) }
-            map.overlays.removeAll { it is Marker && it.id == "wp" }
+            map.overlays.removeAll { it is Marker && (it.id == "wp" || it.id == "start" || it.id == "dir") }
 
             if (track.isNotEmpty()) {
                 val line = Polyline(map).apply {
@@ -1140,6 +1151,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
                 trackLine = line
                 map.overlays.add(line)
+                // V2.2 : marqueur de départ + flèches de direction
+                addStartMarkerAndArrows()
                 map.post {
                     map.zoomToBoundingBox(
                         BoundingBox.fromGeoPoints(track.map { GeoPoint(it.lat, it.lon) })
@@ -1159,9 +1172,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
 
             nextWp = waypoints.firstOrNull()
-            tvStatus.text = "Tracé : %.1f km, D+ %d m".format(
+            val startPt = track.firstOrNull()
+            val endPt = track.lastOrNull()
+            val dirTxt = if (startPt != null && endPt != null && track.size > 1) {
+                val b = GpxUtils.bearing(startPt.lat, startPt.lon, endPt.lat, endPt.lon)
+                val symbols = arrayOf("↑", "↗", "→", "↘", "↓", "↙", "←", "↖")
+                " • " + symbols[((b + 22.5) % 360.0 / 45.0).toInt()] +
+                    " direction générale " + b.toInt() + "°"
+            } else ""
+            tvStatus.text = ("Tracé : %.1f km, D+ %d m".format(
                 trackStats?.distanceKm ?: 0.0, trackStats?.ascentM ?: 0
-            )
+            )) + dirTxt
             tvStatus.setTextColor(android.graphics.Color.WHITE)
             navPanel.visibility = if (track.size >= 2) View.VISIBLE else View.GONE
             map.invalidate()
@@ -1252,6 +1273,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (followMode) recentreOnUser()
         map.invalidate()
 
+        // V2.2 : cap vers le prochain point du tracé (flèche clignotante)
+        if (plannedPairs.isNotEmpty()) {
+            var bestIdx = 0
+            var bestD = Double.MAX_VALUE
+            plannedPairs.forEachIndexed { i, p ->
+                val d = GpxUtils.distance(currentLat!!, currentLon!!, p.first, p.second)
+                if (d < bestD) { bestD = d; bestIdx = i }
+            }
+            val nxt = if (bestIdx < plannedPairs.size - 1) plannedPairs[bestIdx + 1] else plannedPairs.last()
+            dirBearing = GpxUtils.bearing(currentLat!!, currentLon!!, nxt.first, nxt.second)
+        } else dirBearing = null
+
         updateNavigation()
     }
 
@@ -1261,6 +1294,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val options = arrayOf(
             "📥 Importer un GPX",
             "📂 Mes GPX",
+            "🚗 Aller au point de départ",
             "🗺️ Fond de carte",
             "⬇️ Cartes hors-ligne"
         )
@@ -1270,8 +1304,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 when (which) {
                     0 -> openGpx.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml", "*/*"))
                     1 -> showLibrary()
-                    2 -> showTileSourceDialog()
-                    3 -> downloadOfflineArea()
+                    2 -> openNavigationToStart()
+                    3 -> showTileSourceDialog()
+                    4 -> downloadOfflineArea()
                 }
             }
             .setNegativeButton("Fermer", null)
@@ -1281,7 +1316,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun showToolsMenu() {
         val followLabel = if (followMode) "🎯 Suivi carte : ON" else "🎯 Suivi carte : OFF"
         val options = arrayOf(
-            "🧭 Boussole",
             "🌤️ Ciel du jour",
             "📊 Stats du tracé",
             "📍 Waypoints",
@@ -1294,18 +1328,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .setTitle("🧰 Outils")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> showCompass()
-                    1 -> showSkyDialog()
-                    2 -> showStats()
-                    3 -> showWaypointDialog()
-                    4 -> {
+                    0 -> showSkyDialog()
+                    1 -> showStats()
+                    2 -> showWaypointDialog()
+                    3 -> {
                         followMode = !followMode
                         if (followMode) recentreOnUser()
                         Toast.makeText(this, if (followMode) "Suivi activé" else "Suivi coupé", Toast.LENGTH_SHORT).show()
                     }
-                    5 -> showLogs()
-                    6 -> showCloudDialog()
-                    7 -> showHelpDialog()
+                    4 -> showLogs()
+                    5 -> showCloudDialog()
+                    6 -> showHelpDialog()
                 }
             }
             .setNegativeButton("Fermer", null)
@@ -1490,6 +1523,73 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .show()
     }
 
+    /**
+     * V2.2 : marqueur 🏁 au départ, flèches de direction espacées le long
+     * du tracé, et flèche clignotante semi-transparente (direction à prendre).
+     */
+    private fun addStartMarkerAndArrows() {
+        val start = track.firstOrNull() ?: return
+        val m = Marker(map).apply {
+            id = "start"
+            position = GeoPoint(start.lat, start.lon)
+            title = "🏁 Départ — " + trackName
+            setAnchor(0.5f, 1.0f)
+        }
+        map.overlays.add(m)
+
+        // Flèches régulières, orientées selon le cap du tronçon
+        // (osmdroid : rotation positive = anti-horaire, d'où le signe moins)
+        val totalM = (trackStats?.distanceKm ?: 0.0) * 1000.0
+        val spacing = maxOf(500.0, totalM / 25.0)
+        var acc = 0.0
+        var lastArrow = -spacing
+        for (i in 1 until track.size - 1) {
+            acc += GpxUtils.distance(track[i - 1].lat, track[i - 1].lon, track[i].lat, track[i].lon)
+            if (acc - lastArrow >= spacing) {
+                lastArrow = acc
+                val b = GpxUtils.bearing(track[i - 1].lat, track[i - 1].lon, track[i].lat, track[i].lon)
+                val a = Marker(map).apply {
+                    id = "dir"
+                    position = GeoPoint(track[i].lat, track[i].lon)
+                    setAnchor(0.5f, 0.5f)
+                    icon = ContextCompat.getDrawable(applicationContext, R.drawable.arrow_dir)
+                    setRotation((-b).toFloat())
+                }
+                map.overlays.add(a)
+            }
+        }
+
+        // Flèche clignotante (alpha pulsé) — visible dès qu'un tracé est chargé
+        directionArrow.visibility = View.VISIBLE
+        val blink = android.view.animation.AlphaAnimation(0.25f, 0.85f).apply {
+            duration = 600
+            repeatCount = android.view.animation.Animation.INFINITE
+            repeatMode = android.view.animation.Animation.REVERSE
+        }
+        directionArrow.startAnimation(blink)
+    }
+
+    /** V2.2 : ouvre l'app de navigation (voiture) vers le point de départ du tracé. */
+    private fun openNavigationToStart() {
+        val start = track.firstOrNull()
+        if (start == null) {
+            Toast.makeText(this, "Importez d'abord un tracé GPX", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val uri = android.net.Uri.parse("google.navigation:q=" + start.lat + "," + start.lon)
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(
+                    "geo:" + start.lat + "," + start.lon + "?q=" + start.lat + "," + start.lon + " (Départ)"
+                )))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Aucune app de navigation trouvée", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     private fun recentreOnUser() {
         val lat = currentLat ?: return
         val lon = currentLon ?: return
@@ -1658,9 +1758,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         updateCompassViews()
 
-        val bearing = targetBearing ?: return
-        val rotation = ((bearing - azimuth + 360) % 360).toFloat()
-        arrow.animate().rotation(rotation).setDuration(120).start()
+        targetBearing?.let { bearing ->
+            val rotation = ((bearing - azimuth + 360) % 360).toFloat()
+            arrow.animate().rotation(rotation).setDuration(120).start()
+        }
+        val db = dirBearing
+        if (db != null) {
+            val rot = ((db - azimuth + 360) % 360).toFloat()
+            directionArrow.animate().rotation(rot).setDuration(120).start()
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}

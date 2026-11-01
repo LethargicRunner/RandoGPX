@@ -4,6 +4,24 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v2.2
+
+Le tracé prend les choses en main :
+• Marqueur « 🏁 Départ » sur la carte dès qu'un GPX est chargé
+• 📂 → « 🚗 Aller au point de départ » : ouvre votre app de
+  navigation (Google Maps, Waze…) en mode itinéraire vers le
+  départ de la rando
+• Flèches vertes espacées le long du tracé : la direction générale
+  se lit d'un coup d'œil (espacement auto, max ~25 flèches)
+• Direction générale affichée en permanence dans le bandeau
+  (ex. « ↗ direction générale 47° »)
+• Flèche orange clignotante semi-transparente au bas de l'écran :
+  indique la direction du prochain tronçon, suit le cap du téléphone
+• La mini-boussole s'ouvre en GRANDE boussole d'un simple tap
+  (entrée retirée du menu 🧰)
+• « Mes GPX » affiche plus clairement : nom + taille + date, trié
+  du plus récent au plus ancien
+
 ## v2.1
 
 Menus encore plus simples :

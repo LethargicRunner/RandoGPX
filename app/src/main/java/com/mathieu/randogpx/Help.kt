@@ -24,11 +24,11 @@ object Help {
 2. COMPRENDRE L'ÉCRAN
 ═══════════════════════════════
 • En haut : bandeau discret — nom du tracé, distance restante, état de la rando.
-• En haut à droite : bouton « ❓ » (aide en 3 sections : prise en main, FAQ, à propos) et mini-boussole (le rouge indique le nord).
-• Sur la carte : pastille bleue = votre position ; tracé bleu = itinéraire prévu ; tracé orange = votre parcours réel ; points = waypoints du GPX.
+• En haut à droite : bouton « ❓ » (aide en 3 sections) et mini-boussole (le rouge indique le nord) — touchez-la pour ouvrir la GRANDE boussole.
+• Sur la carte : pastille bleue = votre position ; tracé bleu = itinéraire prévu avec 🏁 au départ et des flèches vertes de direction ; tracé orange = votre parcours réel ; points = waypoints du GPX. La flèche orange clignotante indique la direction à prendre.
 • En bas : « ▾ Masquer » replie les menus pour libérer la carte — ▶ Départ/Pause, ■ Terminer et 🆘 restent toujours visibles.
-• 📂 GPX & cartes : importer, Mes GPX, fond de carte, hors-ligne.
-• 🧰 Outils : boussole, ciel du jour (météo + éphémérides), stats, waypoints, suivi carte, journaux, sauvegarde cloud, aide.
+• 📂 GPX & cartes : importer, Mes GPX, « 🚗 Aller au point de départ » (ouvre votre app de navigation voiture), fond de carte, hors-ligne.
+• 🧰 Outils : ciel du jour (météo + éphémérides), stats, waypoints, suivi carte, journaux, sauvegarde cloud, aide.
 
 ═══════════════════════════════
 3. ENREGISTRER UNE RANDO
@@ -66,7 +66,7 @@ object Help {
 ═══════════════════════════════
 7. BOUSSOLE, MÉTÉO, ÉPHÉMÉRIDES
 ═══════════════════════════════
-• 🧭 Boussole : rose marine (rouge = nord, bleu = sud), cap en degrés, direction du prochain waypoint.
+• 🧭 Boussole : touchez la mini-boussole en haut à droite — grande rose marine (rouge = nord, bleu = sud), cap en degrés, direction du prochain waypoint.
 • 🌤️ Ciel du jour : un seul écran — météo du jour en haut (Open-Meteo, réseau ponctuel), éphémérides en dessous (lever/coucher, lumière restante, lune — 100 % hors-ligne), et un bouton « 📅 Prévisions à 5 jours ».
 
 ═══════════════════════════════
