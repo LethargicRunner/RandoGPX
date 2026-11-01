@@ -523,6 +523,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         TrackService.weather = weather
         // V1.13 : SMS de retour proposé en fin de rando si un contact est prévenu
         departureSmsSent = Emergency.load(this) != null
+        // V2.3 : propose de télécharger les cartes de la zone du tracé avant/pendant la rando
+        maybeOfferTrackTiles()
         intent.action = TrackService.ACTION_START
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             startForegroundService(intent) else startService(intent)
@@ -1050,48 +1052,103 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     TileSources.nameOf(map.tileProvider.tileSource) + " (zooms 14–18).\n\n" +
                     "Restez connecté au Wi-Fi jusqu'à la fin. Continuer ?"
             )
-            .setPositiveButton("Télécharger") { _, _ ->
-                Toast.makeText(this, "Téléchargement démarré…", Toast.LENGTH_LONG).show()
-                try {
-                val cm = CacheManager(map)
-                cm.downloadAreaAsync(
-                    this, bbox, zoomMin, zoomMax,
-                    object : CacheManager.CacheManagerCallback {
-                        override fun onTaskComplete() {
-                            runOnUiThread {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "✅ Zone hors-ligne prête ! Vous pouvez couper le réseau.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                        override fun onTaskFailed(errors: Int) {
-                            runOnUiThread {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "⚠ Terminé avec " + errors + " erreurs : vérifiez votre connexion puis relancez.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                        override fun updateProgress(progress: Int, currentZoomLevel: Int, zoomMin: Int, zoomMax: Int) {
-                            runOnUiThread {
-                                tvInfo.text = "Tuiles : " + progress + " (zoom " + currentZoomLevel + "/" + zoomMax + ")"
-                            }
-                        }
-                        override fun downloadStarted() {}
-                        override fun setPossibleTilesInArea(total: Int) {}
-                    }
-                )
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        this, "Téléchargement impossible : " + e.message, Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+            .setPositiveButton("Télécharger") { _, _ -> startTrackTileDownload() }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    /**
+     * V2.3 : au moment d'appuyer sur « ▶ Départ », propose de mettre la zone
+     * du tracé en carte hors-ligne — utile dès que le réseau lâche en montagne.
+     * Le téléchargement tourne en arrière-plan : la rando démarre sans attendre.
+     */
+    private fun maybeOfferTrackTiles() {
+        if (track.size < 2) return
+        val srcName = map.tileProvider.tileSource.name()
+        if (srcName != "OpenTopoMap" && srcName != "IGN Plan") {
+            AlertDialog.Builder(this)
+                .setTitle("Cartes du tracé hors-ligne ?")
+                .setMessage(
+                    "OpenStreetMap standard interdit le téléchargement massif de tuiles.\n\n" +
+                        "Basculer sur OpenTopoMap et télécharger la zone du tracé " +
+                        "pour l'avoir sans réseau pendant la rando ?"
+                )
+                .setPositiveButton("OpenTopoMap") { _, _ ->
+                    map.setTileSource(TileSources.OPENTOPOMAP)
+                    map.invalidate()
+                    startTrackTileDownload()
+                }
+                .setNeutralButton("IGN Plan") { _, _ ->
+                    map.setTileSource(TileSources.IGN_PLAN)
+                    map.invalidate()
+                    startTrackTileDownload()
+                }
+                .setNegativeButton("Non merci", null)
+                .show()
+            return
+        }
+        val bbox = trackBBox()
+        AlertDialog.Builder(this)
+            .setTitle("Télécharger la zone du tracé ?")
+            .setMessage(
+                "Environ " + estimateTiles(bbox, 14, 18) + " tuiles seront téléchargées " +
+                    "en arrière-plan (" + TileSources.nameOf(map.tileProvider.tileSource) +
+                    ", zooms 14–18).\n\n" +
+                    "Pratique si le réseau lâche en route. La rando démarre sans attendre " +
+                    "la fin du téléchargement."
+            )
+            .setPositiveButton("Télécharger") { _, _ -> startTrackTileDownload() }
+            .setNegativeButton("Pas maintenant", null)
+            .show()
+    }
+
+    private fun trackBBox(): BoundingBox =
+        BoundingBox.fromGeoPoints(track.map { GeoPoint(it.lat, it.lon) })
+            .increaseByScale(1.15f)
+
+    /** Télécharge toutes les tuiles couvrant le tracé (zooms 14–18), en arrière-plan. */
+    private fun startTrackTileDownload() {
+        if (track.size < 2) return
+        val bbox = trackBBox()
+        Toast.makeText(this, "⬇️ Téléchargement des cartes du tracé démarré…", Toast.LENGTH_LONG).show()
+        try {
+            val cm = CacheManager(map)
+            cm.downloadAreaAsync(
+                this, bbox, 14, 18,
+                object : CacheManager.CacheManagerCallback {
+                    override fun onTaskComplete() {
+                        runOnUiThread {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "✅ Cartes du tracé prêtes ! Vous pouvez couper le réseau.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                    override fun onTaskFailed(errors: Int) {
+                        runOnUiThread {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "⚠ Terminé avec " + errors + " erreurs : vérifiez votre connexion puis relancez.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                    override fun updateProgress(progress: Int, currentZoomLevel: Int, zoomMin: Int, zoomMax: Int) {
+                        runOnUiThread {
+                            if (TrackService.state == TrackService.State.IDLE)
+                                tvInfo.text = "⬇️ Tuiles : " + progress + " (zoom " + currentZoomLevel + "/" + zoomMax + ")"
+                        }
+                    }
+                    override fun downloadStarted() {}
+                    override fun setPossibleTilesInArea(total: Int) {}
+                }
+            )
+        } catch (e: Exception) {
+            Toast.makeText(
+                this, "Téléchargement impossible : " + e.message, Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun estimateTiles(bbox: BoundingBox, zMin: Int, zMax: Int): Long {

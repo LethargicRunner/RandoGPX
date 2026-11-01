@@ -4,6 +4,19 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v2.3
+
+Cartes prêtes avant de quitter le réseau :
+• Au moment d'appuyer sur « ▶ Départ » avec un GPX chargé, l'app
+  propose de télécharger toutes les tuiles couvrant la zone du
+  tracé (zooms 14–18, OpenTopoMap ou IGN Plan)
+• Le téléchargement tourne en arrière-plan : la rando démarre
+  sans attendre — un message confirme quand la zone est prête
+• Avec OpenStreetMap standard (qui interdit le téléchargement
+  massif), l'app propose de basculer sur OpenTopoMap ou IGN Plan
+• « ⬇️ Cartes hors-ligne » du menu 📂 garde le même comportement
+  et réutilise le même téléchargement
+
 ## v2.2
 
 Le tracé prend les choses en main :
