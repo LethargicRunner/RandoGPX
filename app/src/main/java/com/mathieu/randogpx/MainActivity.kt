@@ -96,6 +96,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var recElapsedMs = 0L
     private var lastUiState: TrackService.State? = null
 
+    // V2.5 : temps de pause cumulé
+    private var recPauseStartAt = 0L
+    private var recPauseMs = 0L
+
     // Navigation turn-by-turn
     private var plannedPairs: List<Pair<Double, Double>> = emptyList()
     private val walkedPoints = mutableListOf<Pair<Double, Double>>()
@@ -132,13 +136,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             // V2.4 : chronomètre — départ, pause (cumul), reprise
             val prev = lastUiState
             when (st) {
-                TrackService.State.RECORDING -> if (recStartAt == 0L || prev == TrackService.State.IDLE) {
-                    recStartAt = System.currentTimeMillis()
-                    recElapsedMs = 0L
+                TrackService.State.RECORDING -> {
+                    // reprise : cumule la pause qui vient de se terminer
+                    if (prev == TrackService.State.PAUSED && recPauseStartAt > 0) {
+                        recPauseMs += System.currentTimeMillis() - recPauseStartAt
+                        recPauseStartAt = 0L
+                    }
+                    // (re)démarrage : remise à zéro du chrono et des pauses
+                    if (recStartAt == 0L || prev == TrackService.State.IDLE) {
+                        recStartAt = System.currentTimeMillis()
+                        recElapsedMs = 0L
+                        recPauseMs = 0L
+                        recPauseStartAt = 0L
+                    }
                 }
-                TrackService.State.PAUSED -> if (prev == TrackService.State.RECORDING && recStartAt > 0) {
-                    recElapsedMs += System.currentTimeMillis() - recStartAt
-                    recStartAt = 0L
+                TrackService.State.PAUSED -> {
+                    if (prev == TrackService.State.RECORDING && recStartAt > 0) {
+                        recElapsedMs += System.currentTimeMillis() - recStartAt
+                        recStartAt = 0L
+                    }
+                    if (recPauseStartAt == 0L) recPauseStartAt = System.currentTimeMillis()
                 }
                 else -> { }
             }
@@ -521,6 +538,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 if (remaining > 0) txt += " • reste " + remaining.toKm()
             } catch (_: Exception) { }
         }
+        val pauseMsNow = recPauseMs +
+            (if (recPauseStartAt > 0) System.currentTimeMillis() - recPauseStartAt else 0L)
+        if (pauseMsNow >= 60_000L) txt += " • ⏸ " + formatDurationShort(pauseMsNow) + " de pause"
         return txt
     }
 

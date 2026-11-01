@@ -33,6 +33,10 @@ class HikeLogger(
     fun pause() { if (pauseStart == null) pauseStart = System.currentTimeMillis() }
     fun resume() { pauseStart?.let { pausedMs += System.currentTimeMillis() - it }; pauseStart = null }
 
+    /** V2.5 : temps de pause cumulé, pause en cours comprise. */
+    fun totalPauseMs(): Long =
+        pausedMs + (pauseStart?.let { System.currentTimeMillis() - it } ?: 0L)
+
     fun add(lat: Double, lon: Double, ele: Double?) {
         if (pauseStart != null) return   // pas de points pendant la pause
         if (points.isEmpty() || GpxUtils.distance(
@@ -68,7 +72,9 @@ class HikeLogger(
                 if (it.second > 0) put("difficulte_etoiles", it.second)
                 if (it.third.isNotBlank()) put("note", it.third)
             }
-            put("duree_min", elapsedMs() / 60000)
+            put("duree_min", elapsedMs() / 60000)                       // temps de marche
+            put("duree_pause_min", totalPauseMs() / 60000)              // V2.5 : pauses
+            put("duree_totale_min", (elapsedMs() + totalPauseMs()) / 60000)
             put("distance_km", Math.round(dist / 10.0) / 100.0)
             put("denivele_positif_m", asc)
             put("points_enregistres", points.size)
@@ -171,9 +177,16 @@ class HikeLogger(
                 points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon
             )
         }
-        return "Rando enregistrée : %.1f km, %d min, D+ %d m%s".format(
+        // V2.5 : détail des pauses dans le résumé
+        val pauseMin = totalPauseMs() / 60000
+        val pauseTxt = if (pauseMin >= 1)
+            " + " + pauseMin + " min de pause (total " +
+                ((elapsedMs() + totalPauseMs()) / 60000) + " min)"
+        else ""
+        return "Rando enregistrée : %.1f km, %d min de marche%s, D+ %d m%s".format(
             dist / 1000,
             elapsedMs() / 60000,
+            pauseTxt,
             TrackStats.compute(points.map { TrackPoint(it.lat, it.lon, it.ele, it.time) }).ascentM,
             weatherAtStart?.let { " | " + it.description + ", " + it.temperatureC + "°C" } ?: ""
         ) + (if (gpxFile.isNotEmpty()) "\n📁 GPX : " + gpxFile else "")

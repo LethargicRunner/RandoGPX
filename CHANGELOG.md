@@ -4,6 +4,17 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v2.5
+
+Le temps de pause entre dans les statistiques :
+• Résumé de fin : « 12,3 km, 185 min de marche + 40 min de pause
+  (total 225 min), D+ 850 m »
+• Bandeau live : les pauses cumulées s'affichent dès la 1re minute
+  (ex. « 🔴 ⏱ 1 h 05 • 4,5 km parcourus • ⏸ 12 min de pause • reste 8 km »)
+• Journal JSON : nouveaux champs duree_pause_min et duree_totale_min
+  (duree_min reste = temps de marche) — base prête pour l'historique
+  et la comparaison des performances entre randos
+
 ## v2.4
 
 Bandeau live pendant la rando :
