@@ -91,6 +91,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     /** V1.13 : un contact d'urgence est-il prévenu pour cette rando ? */
     private var departureSmsSent = false
 
+    // V2.4 : chronomètre de la rando en cours (résiste aux pauses)
+    private var recStartAt = 0L
+    private var recElapsedMs = 0L
+    private var lastUiState: TrackService.State? = null
+
     // Navigation turn-by-turn
     private var plannedPairs: List<Pair<Double, Double>> = emptyList()
     private val walkedPoints = mutableListOf<Pair<Double, Double>>()
@@ -124,6 +129,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private val stateListener: (TrackService.State, String?) -> Unit = { st, summary ->
         runOnUiThread {
+            // V2.4 : chronomètre — départ, pause (cumul), reprise
+            val prev = lastUiState
+            when (st) {
+                TrackService.State.RECORDING -> if (recStartAt == 0L || prev == TrackService.State.IDLE) {
+                    recStartAt = System.currentTimeMillis()
+                    recElapsedMs = 0L
+                }
+                TrackService.State.PAUSED -> if (prev == TrackService.State.RECORDING && recStartAt > 0) {
+                    recElapsedMs += System.currentTimeMillis() - recStartAt
+                    recStartAt = 0L
+                }
+                else -> { }
+            }
+            lastUiState = st
             syncControls()
             // V2.0.1 : résumé de fin en dialogue (partage GPX + cloud)
             if (st == TrackService.State.IDLE && summary != null) showFinishSummary(summary)
@@ -473,11 +492,44 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         btnFinish.isEnabled = TrackService.state != TrackService.State.IDLE
         when (TrackService.state) {
-            TrackService.State.RECORDING ->
-                tvInfo.text = "🔴 Enregistrement en cours (" + TrackService.trackName + ")"
-            TrackService.State.PAUSED -> tvInfo.text = "⏸ Rando en pause"
+            TrackService.State.RECORDING -> tvInfo.text = "🔴 " + liveStatsText()
+            TrackService.State.PAUSED -> tvInfo.text = "⏸ " + liveStatsText()
             TrackService.State.IDLE -> tvInfo.text = "🟢 Prêt — aucune rando en cours"
         }
+    }
+
+    /**
+     * V2.4 : bandeau live — temps et distance parcourus depuis le départ,
+     * plus la distance restante quand un GPX guide la rando.
+     */
+    private fun liveStatsText(): String {
+        val elapsed = recElapsedMs + (if (recStartAt > 0) System.currentTimeMillis() - recStartAt else 0L)
+        var walked = 0.0
+        for (i in 1 until walkedPoints.size) {
+            walked += GpxUtils.distance(
+                walkedPoints[i - 1].first, walkedPoints[i - 1].second,
+                walkedPoints[i].first, walkedPoints[i].second
+            )
+        }
+        var txt = "⏱ " + formatDurationShort(elapsed) + " • " + walked.toKm() + " parcourus"
+        val lat = currentLat
+        val lon = currentLon
+        if (track.size >= 2 && lat != null && lon != null && !returnMode) {
+            try {
+                val proj = GpxUtils.projectOnTrack(lat, lon, track)
+                val remaining = proj.totalDistance - proj.distanceCovered
+                if (remaining > 0) txt += " • reste " + remaining.toKm()
+            } catch (_: Exception) { }
+        }
+        return txt
+    }
+
+    /** Durée condensée : « 42 min » ou « 1 h 05 ». */
+    private fun formatDurationShort(ms: Long): String {
+        val totalMin = ms / 60000
+        return if (totalMin >= 60)
+            (totalMin / 60).toString() + " h " + (totalMin % 60).toString().padStart(2, '0')
+        else totalMin.toString() + " min"
     }
 
     override fun onResume() {
@@ -820,6 +872,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun formatDuration(ms: Long): String {
         val totalMin = ms / 60000
         return (totalMin / 60).toString() + " h " + (totalMin % 60).toString().padStart(2, '0')
+    }
+
+    /** V2.4 : appelé à chaque fix GPS pendant la rando. */
+    private fun updateLiveStats() {
+        if (TrackService.state != TrackService.State.RECORDING) return
+        tvInfo.text = "🔴 " + liveStatsText()
     }
 
     // ---------- Mode nuit ----------
@@ -1316,6 +1374,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
             recordLine?.setPoints(walkedPoints.map { GeoPoint(it.first, it.second) })
         }
+
+        // V2.4 : temps / distance parcourus / distance restante, en direct
+        if (TrackService.state == TrackService.State.RECORDING) updateLiveStats()
 
         if (userMarker == null) {
             userMarker = Marker(map).apply {

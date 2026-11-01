@@ -4,6 +4,17 @@ Chaque nouvelle version = une section `## vX.Y` en haut de ce fichier.
 Le workflow publie automatiquement la première section en notes de release
 (le tag et le nom viennent de `versionName` dans app/build.gradle.kts).
 
+## v2.4
+
+Bandeau live pendant la rando :
+• Temps écoulé et distance parcourue affichés en permanence
+  pendant l'enregistrement (ex. « 🔴 ⏱ 1 h 05 • 4,5 km parcourus »)
+• Avec un GPX chargé, la distance restante s'ajoute au bandeau
+  (ex. « • reste 12,3 km »)
+• En pause, le bandeau garde le résumé (le chrono est cumulé,
+  les pauses ne comptent pas)
+• En rando libre, temps + distance uniquement (pas de « reste »)
+
 ## v2.3
 
 Cartes prêtes avant de quitter le réseau :

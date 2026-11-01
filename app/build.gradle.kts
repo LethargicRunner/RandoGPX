@@ -11,8 +11,8 @@ android {
         applicationId = "com.mathieu.randogpx"
         minSdk = 24
         targetSdk = 34
-        versionCode = 19
-        versionName = "2.3"
+        versionCode = 20
+        versionName = "2.4"
     }
 
     // Signature release : n'active la signature que si un keystore est fourni
